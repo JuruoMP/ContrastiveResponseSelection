@@ -1,0 +1,2 @@
+tensorflow-gpu==1.15
+transformers==3.0.2
