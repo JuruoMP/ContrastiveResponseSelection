@@ -49,6 +49,9 @@ DELETION_PARAMS = defaultdict(
 SEARCH_PARAMS = defaultdict(
     do_sent_search=True,  # True or False for jude
 )
+CONTRASTIVE_PARAMS = defaultdict(
+    do_contrastive=True,
+)
 
 BASE_PARAMS = defaultdict(
     # lambda: None,  # Set default value to None.
@@ -96,12 +99,15 @@ BASE_PARAMS = defaultdict(
     do_sent_insertion=False,  # True or False for jude
     do_sent_deletion=False,  # True or False for jude
     do_sent_search=False,  # True or False for jude
+    do_contrastive=False,  # True for contrastive learning
 
     max_sequence_len=512,
     res_sel_loss_ratio=1.0,
     ins_loss_ratio=1.0,  # 0.01, 0.1, 0.5, 1,
     del_loss_ratio=1.0,  # 0.01, 0.1, 0.5, 1,
     srch_loss_ratio=1.0,  # 0.01, 0.1, 0.5, 1,
+    cl_loss_ratio=1.0,
+    projection_dim=256,
     max_utt_len=5,  # ubuntu : 5
 
     save_dirpath='checkpoints/',  # /path/to/checkpoints

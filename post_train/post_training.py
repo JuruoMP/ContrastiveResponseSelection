@@ -106,7 +106,7 @@ class PostTraining(object):
         )
 
     def train(self):
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self._build_dataloader()
         self._build_model()

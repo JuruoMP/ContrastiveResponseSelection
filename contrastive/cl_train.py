@@ -10,14 +10,14 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from data.dataset import ResponseSelectionDataset
+from data.contrastive_dataset import ContrastiveResponseSelectionDataset
 from models.utils.checkpointing import CheckpointManager, load_checkpoint
 from models import Model
 from evaluation import Evaluation
 from transformers import AdamW, get_linear_schedule_with_warmup
 
 
-class ResponseSelection(object):
+class ContrastiveResponseSelection(object):
     def __init__(self, hparams):
         self.hparams = hparams
         self._logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ class ResponseSelection(object):
         # =============================================================================
         #   SETUP DATASET, DATALOADER
         # =============================================================================
-        self.train_dataset = ResponseSelectionDataset(self.hparams, split="train")
+        self.train_dataset = ContrastiveResponseSelectionDataset(self.hparams, split="train")
         self.train_dataloader = DataLoader(
             self.train_dataset,
             batch_size=self.hparams.train_batch_size,
@@ -130,7 +130,7 @@ class ResponseSelection(object):
 
         train_begin = datetime.utcnow()  # New
         global_iteration_step = 0
-        accu_loss, accu_res_sel_loss, accu_ins_loss, accu_del_loss, accu_srch_loss = 0, 0, 0, 0, 0
+        accu_loss, accu_cl_loss, accu_res_sel_loss, accu_ins_loss, accu_del_loss, accu_srch_loss = 0, 0, 0, 0, 0, 0
         accu_cnt = 0
 
         for epoch in range(self.start_epoch, self.hparams.num_epochs + 1):
@@ -139,11 +139,15 @@ class ResponseSelection(object):
             accu_batch = 0
             for batch_idx, batch in enumerate(tqdm_batch_iterator):
 
-                buffer_batch = batch.copy()
-                for task_key in batch:
-                    for key in buffer_batch[task_key]:
-                        buffer_batch[task_key][key] = buffer_batch[task_key][key].to(self.device)
+                # buffer_batch = batch.copy()
+                # for task_key in batch:
+                #     for key in buffer_batch[task_key]:
+                #         buffer_batch[task_key][key] = buffer_batch[task_key][key].to(self.device)
 
+                if self.hparams.do_contrastive:
+                    buffer_batch, (batch_aug1, batch_aug2) = batch
+                else:
+                    buffer_batch = batch
                 _, losses = self.model(buffer_batch)
                 res_sel_loss, ins_loss, del_loss, srch_loss = losses
                 if res_sel_loss is not None:
@@ -162,10 +166,16 @@ class ResponseSelection(object):
                     srch_loss = self.hparams.srch_loss_ratio * srch_loss.mean()
                     accu_srch_loss += srch_loss.item()
 
-                loss = None
-                for task_tensor_loss in [res_sel_loss, ins_loss, del_loss, srch_loss]:
+                loss = res_sel_loss
+                for task_tensor_loss in [ins_loss, del_loss, srch_loss]:
                     if task_tensor_loss is not None:
-                        loss = loss + task_tensor_loss if loss is not None else task_tensor_loss
+                        loss = loss + task_tensor_loss
+
+                if self.hparams.do_contrastive:
+                    contrastive_loss = self.model.contrastive_forward(batch_aug1, batch_aug2)
+                    cl_loss = self.hparams.cl_loss_ratio * contrastive_loss
+                    accu_cl_loss += cl_loss.item()
+                    loss += cl_loss
 
                 loss.backward()
                 accu_loss += loss.item()
@@ -195,10 +205,11 @@ class ResponseSelection(object):
                     #     accu_res_sel_loss / accu_cnt, accu_ins_loss / accu_cnt, accu_del_loss / accu_cnt,
                     #     accu_srch_loss / accu_cnt,
                     #     self.optimizer.param_groups[0]['lr'])
-                    description = "[Epoch:{:2d}][Iter:{:3d}][Loss: {:.3f}][Res_Loss: {:.3f}]" \
+                    description = "[Epoch:{:2d}][Iter:{:3d}][Loss: {:.3f}][CL_Loss: {:.3f}][Res_Loss: {:.3f}]" \
                                   "[Ins_Loss: {:.3f}][Del_Loss: {:.3f}][Srch_Loss: {:.3f}][lr: {:.1e}]".format(
                         epoch,
                         global_iteration_step, accu_loss / accu_cnt,
+                        accu_cl_loss / accu_cnt,
                         accu_res_sel_loss / accu_cnt, accu_ins_loss / accu_cnt, accu_del_loss / accu_cnt,
                         accu_srch_loss / accu_cnt,
                         self.optimizer.param_groups[0]['lr'])

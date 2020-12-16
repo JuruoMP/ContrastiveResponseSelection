@@ -4,6 +4,7 @@ import torch.nn as nn
 from models.bert_insertion import BertInsertion
 from models.bert_deletion import BertDeletion
 from models.bert_search import BertSearch
+from models.contrastive_loss import NTXentLoss
 
 
 class BertCls(nn.Module):
@@ -41,6 +42,12 @@ class BertCls(nn.Module):
             nn.Linear(self.hparams.bert_hidden_dim, 1)
         )
 
+        self._projection = nn.Sequential(
+            nn.Linear(self.hparams.bert_hidden_dim, self.hparams.projection_dim),
+            nn.ReLU(),
+            nn.Linear(self.hparams.projection_dim, self.hparams.projection_dim)
+        )
+
         if self.hparams.do_sent_insertion:
             self._bert_insertion = BertInsertion(hparams, self._model)
         if self.hparams.do_sent_deletion:
@@ -49,6 +56,7 @@ class BertCls(nn.Module):
             self._bert_search = BertSearch(hparams, self._model)
 
         self._criterion = nn.BCEWithLogitsLoss()
+        self._nt_xent_criterion = NTXentLoss(temperature=0.5, use_cosine_similarity=True)
 
     def forward(self, batch):
         logits, res_sel_loss, ins_loss, del_loss, srch_loss = None, None, None, None, None
@@ -73,3 +81,25 @@ class BertCls(nn.Module):
             srch_loss = self._bert_search(batch["srch"], batch["res_sel"]["label"])
 
         return logits, (res_sel_loss, ins_loss, del_loss, srch_loss)
+
+    def contrastive_forward(self, batch_aug1, batch_aug2):
+        assert self.hparams.do_contrastive and self.training
+        outputs_aug1 = self._model(
+            batch_aug1["res_sel"]["anno_sent"],
+            token_type_ids=batch_aug1["res_sel"]["segment_ids"],
+            attention_mask=batch_aug1["res_sel"]["attention_mask"]
+        )
+        outputs_aug2 = self._model(
+            batch_aug2["res_sel"]["anno_sent"],
+            token_type_ids=batch_aug2["res_sel"]["segment_ids"],
+            attention_mask=batch_aug2["res_sel"]["attention_mask"]
+        )
+        bert_outputs_aug1 = outputs_aug1[0]
+        bert_outputs_aug2 = outputs_aug2[0]
+        cls_aug1 = bert_outputs_aug1[:, 0, :]
+        cls_aug2 = bert_outputs_aug2[:, 0, :]
+        z_aug1 = self._projection(cls_aug1)
+        z_aug2 = self._projection(cls_aug2)
+        contrastive_loss = self._nt_xent_criterion(z_aug1, z_aug2)
+        return contrastive_loss
+
