@@ -145,7 +145,7 @@ class ResponseSelection(object):
                         buffer_batch[task_key][key] = buffer_batch[task_key][key].to(self.device)
 
                 _, losses = self.model(buffer_batch)
-                res_sel_loss, ins_loss, del_loss, srch_loss = losses
+                res_sel_loss, ins_loss, del_loss, srch_loss, _ = losses
                 if res_sel_loss is not None:
                     res_sel_loss = self.hparams.res_sel_loss_ratio * res_sel_loss.mean()
                     accu_res_sel_loss += res_sel_loss.item()

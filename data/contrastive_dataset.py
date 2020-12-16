@@ -88,7 +88,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
         curr_example = self.input_examples[index]
         current_feature = self._example_to_feature(index, curr_example)
 
-        if self.hparams.do_contrastive:
+        if self.hparams.do_contrastive and self.split == "train":
             response1, response2 = curr_example.augments
             curr_example_aug1, curr_example_aug2 = copy.deepcopy(curr_example), copy.deepcopy(curr_example)
             curr_example_aug1.response = response1
@@ -97,9 +97,11 @@ class ContrastiveResponseSelectionDataset(Dataset):
             curr_example_aug2.response_len = len(response2)
             current_feature_aug1 = self._example_to_feature(index, curr_example_aug1)
             current_feature_aug2 = self._example_to_feature(index, curr_example_aug2)
-            return current_feature, (current_feature_aug1, current_feature_aug2)
-        else:
-            return current_feature
+            for k in current_feature_aug1:
+                current_feature[k + '_aug1'] = current_feature_aug1[k]
+                current_feature[k + '_aug2'] = current_feature_aug2[k]
+
+        return current_feature
 
 
     def _example_to_feature(self, index, example):

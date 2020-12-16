@@ -1,20 +1,19 @@
-import os
-import numpy as np
 import logging
-
+import os
 from datetime import datetime
-from tqdm import tqdm
 
+import numpy as np
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
+from transformers import AdamW, get_linear_schedule_with_warmup
 
 from data.contrastive_dataset import ContrastiveResponseSelectionDataset
-from models.utils.checkpointing import CheckpointManager, load_checkpoint
+from contrastive.cl_evaluation import ContrastiveEvaluation
 from models import Model
-from evaluation import Evaluation
-from transformers import AdamW, get_linear_schedule_with_warmup
+from models.utils.checkpointing import CheckpointManager, load_checkpoint
 
 
 class ContrastiveResponseSelection(object):
@@ -123,7 +122,7 @@ class ContrastiveResponseSelection(object):
         # ins, del, mod check!
 
         # Evaluation Setup
-        evaluation = Evaluation(self.hparams, model=self.model)
+        evaluation = ContrastiveEvaluation(self.hparams, model=self.model)
 
         start_time = datetime.now().strftime('%H:%M:%S')
         self._logger.info("Start train model at %s" % start_time)
@@ -144,12 +143,9 @@ class ContrastiveResponseSelection(object):
                 #     for key in buffer_batch[task_key]:
                 #         buffer_batch[task_key][key] = buffer_batch[task_key][key].to(self.device)
 
-                if self.hparams.do_contrastive:
-                    buffer_batch, (batch_aug1, batch_aug2) = batch
-                else:
-                    buffer_batch = batch
+                buffer_batch = batch
                 _, losses = self.model(buffer_batch)
-                res_sel_loss, ins_loss, del_loss, srch_loss = losses
+                res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss = losses
                 if res_sel_loss is not None:
                     res_sel_loss = self.hparams.res_sel_loss_ratio * res_sel_loss.mean()
                     accu_res_sel_loss += res_sel_loss.item()
@@ -172,8 +168,7 @@ class ContrastiveResponseSelection(object):
                         loss = loss + task_tensor_loss
 
                 if self.hparams.do_contrastive:
-                    contrastive_loss = self.model.contrastive_forward(batch_aug1, batch_aug2)
-                    cl_loss = self.hparams.cl_loss_ratio * contrastive_loss
+                    cl_loss = self.hparams.cl_loss_ratio * contrastive_loss.mean()
                     accu_cl_loss += cl_loss.item()
                     loss += cl_loss
 
@@ -205,13 +200,12 @@ class ContrastiveResponseSelection(object):
                     #     accu_res_sel_loss / accu_cnt, accu_ins_loss / accu_cnt, accu_del_loss / accu_cnt,
                     #     accu_srch_loss / accu_cnt,
                     #     self.optimizer.param_groups[0]['lr'])
-                    description = "[Epoch:{:2d}][Iter:{:3d}][Loss: {:.3f}][CL_Loss: {:.3f}][Res_Loss: {:.3f}]" \
-                                  "[Ins_Loss: {:.3f}][Del_Loss: {:.3f}][Srch_Loss: {:.3f}][lr: {:.1e}]".format(
+                    description = "[Epoch:{:2d}][Iter:{:3d}][Loss: {:.3f}]" \
+                                  "[CL/Res/Ins/Del/Srch: {:.3f}/{:.3f}/{:.3f}/{:.3f}/{:.3f}][lr: {:.1e}]".format(
                         epoch,
                         global_iteration_step, accu_loss / accu_cnt,
-                        accu_cl_loss / accu_cnt,
-                        accu_res_sel_loss / accu_cnt, accu_ins_loss / accu_cnt, accu_del_loss / accu_cnt,
-                        accu_srch_loss / accu_cnt,
+                        accu_cl_loss / accu_cnt, accu_res_sel_loss / accu_cnt, accu_ins_loss / accu_cnt,
+                        accu_del_loss / accu_cnt, accu_srch_loss / accu_cnt,
                         self.optimizer.param_groups[0]['lr'])
                     tqdm_batch_iterator.set_description(description)
 

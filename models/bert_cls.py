@@ -59,7 +59,7 @@ class BertCls(nn.Module):
         self._nt_xent_criterion = NTXentLoss(temperature=0.5, use_cosine_similarity=True)
 
     def forward(self, batch):
-        logits, res_sel_loss, ins_loss, del_loss, srch_loss = None, None, None, None, None
+        logits, res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss = None, None, None, None, None, None
 
         if self.hparams.do_response_selection:
             outputs = self._model(
@@ -80,26 +80,23 @@ class BertCls(nn.Module):
         if self.hparams.do_sent_search and (self.training or self.hparams.pca_visualization):
             srch_loss = self._bert_search(batch["srch"], batch["res_sel"]["label"])
 
-        return logits, (res_sel_loss, ins_loss, del_loss, srch_loss)
+        if self.hparams.do_contrastive and self.training:
+            outputs_aug1 = self._model(
+                batch["res_sel_aug1"]["anno_sent"],
+                token_type_ids=batch["res_sel_aug1"]["segment_ids"],
+                attention_mask=batch["res_sel_aug1"]["attention_mask"]
+            )
+            outputs_aug2 = self._model(
+                batch["res_sel_aug2"]["anno_sent"],
+                token_type_ids=batch["res_sel_aug2"]["segment_ids"],
+                attention_mask=batch["res_sel_aug2"]["attention_mask"]
+            )
+            bert_outputs_aug1 = outputs_aug1[0]
+            bert_outputs_aug2 = outputs_aug2[0]
+            cls_aug1 = bert_outputs_aug1[:, 0, :]
+            cls_aug2 = bert_outputs_aug2[:, 0, :]
+            z_aug1 = self._projection(cls_aug1)
+            z_aug2 = self._projection(cls_aug2)
+            contrastive_loss = self._nt_xent_criterion(z_aug1, z_aug2)
 
-    def contrastive_forward(self, batch_aug1, batch_aug2):
-        assert self.hparams.do_contrastive and self.training
-        outputs_aug1 = self._model(
-            batch_aug1["res_sel"]["anno_sent"],
-            token_type_ids=batch_aug1["res_sel"]["segment_ids"],
-            attention_mask=batch_aug1["res_sel"]["attention_mask"]
-        )
-        outputs_aug2 = self._model(
-            batch_aug2["res_sel"]["anno_sent"],
-            token_type_ids=batch_aug2["res_sel"]["segment_ids"],
-            attention_mask=batch_aug2["res_sel"]["attention_mask"]
-        )
-        bert_outputs_aug1 = outputs_aug1[0]
-        bert_outputs_aug2 = outputs_aug2[0]
-        cls_aug1 = bert_outputs_aug1[:, 0, :]
-        cls_aug2 = bert_outputs_aug2[:, 0, :]
-        z_aug1 = self._projection(cls_aug1)
-        z_aug2 = self._projection(cls_aug2)
-        contrastive_loss = self._nt_xent_criterion(z_aug1, z_aug2)
-        return contrastive_loss
-
+        return logits, (res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss)
