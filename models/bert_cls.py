@@ -4,7 +4,7 @@ import torch.nn as nn
 from models.bert_insertion import BertInsertion
 from models.bert_deletion import BertDeletion
 from models.bert_search import BertSearch
-from models.contrastive_loss import NTXentLoss
+from models.contrastive_loss import NTXentLoss, ConditionalNTXentLoss
 
 
 class BertCls(nn.Module):
@@ -56,11 +56,15 @@ class BertCls(nn.Module):
             self._bert_search = BertSearch(hparams, self._model)
 
         self._criterion = nn.BCEWithLogitsLoss()
-        self._nt_xent_criterion = NTXentLoss(temperature=0.5, use_cosine_similarity=True)
+        if self.hparams.use_batch_negative:
+            self._nt_xent_criterion = NTXentLoss(temperature=0.5, use_cosine_similarity=True)
+        else:
+            self._nt_xent_criterion = ConditionalNTXentLoss(temperature=0.5, use_cosine_similarity=True)
 
-    def forward(self, batch):
+    def forward(self, batch_data):
         logits, res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss = None, None, None, None, None, None
 
+        batch = batch_data['original']
         if self.hparams.do_response_selection:
             outputs = self._model(
                 batch["res_sel"]["anno_sent"],
@@ -81,22 +85,21 @@ class BertCls(nn.Module):
             srch_loss = self._bert_search(batch["srch"], batch["res_sel"]["label"])
 
         if self.hparams.do_contrastive and self.training:
-            outputs_aug1 = self._model(
-                batch["res_sel_aug1"]["anno_sent"],
-                token_type_ids=batch["res_sel_aug1"]["segment_ids"],
-                attention_mask=batch["res_sel_aug1"]["attention_mask"]
+            batch_aug = batch_data['augment']
+            outputs_aug = self._model(
+                batch_aug["res_sel"]["anno_sent"],
+                token_type_ids=batch_aug["res_sel"]["segment_ids"],
+                attention_mask=batch_aug["res_sel"]["attention_mask"]
             )
-            outputs_aug2 = self._model(
-                batch["res_sel_aug2"]["anno_sent"],
-                token_type_ids=batch["res_sel_aug2"]["segment_ids"],
-                attention_mask=batch["res_sel_aug2"]["attention_mask"]
-            )
-            bert_outputs_aug1 = outputs_aug1[0]
-            bert_outputs_aug2 = outputs_aug2[0]
-            cls_aug1 = bert_outputs_aug1[:, 0, :]
-            cls_aug2 = bert_outputs_aug2[:, 0, :]
-            z_aug1 = self._projection(cls_aug1)
-            z_aug2 = self._projection(cls_aug2)
-            contrastive_loss = self._nt_xent_criterion(z_aug1, z_aug2)
+            bert_outputs_aug = outputs_aug[0]
+            cls_logits_aug = bert_outputs_aug[:, 0, :]
+            z = self._projection(cls_logits)
+            z_aug = self._projection(cls_logits_aug)
+            contrastive_loss = self._nt_xent_criterion(z, z_aug)
+
+            if self.hparams.do_augment_response_selection:
+                logits_aug = self._classification(cls_logits_aug)  # bs, 1
+                logits_aug = logits_aug.squeeze(-1)
+                res_sel_loss = (res_sel_loss + self._criterion(logits_aug, batch_aug["res_sel"]["label"])) / 2
 
         return logits, (res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss)

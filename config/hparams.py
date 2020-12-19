@@ -20,7 +20,7 @@ UBUNTU_PARAMS = defaultdict(
     recall_k_list=[1, 2, 5, 10],
     evaluate_data_type="test",
     language="english",
-    eval_batch_size=10,
+    eval_batch_size=1,
 )
 
 DOUBAN_PARAMS = defaultdict(
@@ -51,6 +51,9 @@ SEARCH_PARAMS = defaultdict(
 )
 CONTRASTIVE_PARAMS = defaultdict(
     do_contrastive=True,
+)
+AUGMENT_PARAMS = defaultdict(
+    do_augment_response_selection=True,
 )
 
 BASE_PARAMS = defaultdict(
@@ -100,6 +103,8 @@ BASE_PARAMS = defaultdict(
     do_sent_deletion=False,  # True or False for jude
     do_sent_search=False,  # True or False for jude
     do_contrastive=False,  # True for contrastive learning
+    use_batch_negative=False,
+    do_augment_response_selection=False,
 
     max_sequence_len=512,
     res_sel_loss_ratio=1.0,

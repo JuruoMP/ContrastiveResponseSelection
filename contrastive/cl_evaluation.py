@@ -63,6 +63,7 @@ class ContrastiveEvaluation(object):
                 batch_size=self.hparams.eval_batch_size,
                 num_workers=self.hparams.cpu_workers,
                 drop_last=False,
+                collate_fn=ContrastiveResponseSelectionDataset.collate_fn,
             )
 
     def _build_model(self):
@@ -90,13 +91,11 @@ class ContrastiveEvaluation(object):
         with torch.no_grad():
             for batch_idx, batch in enumerate(tqdm(self._dataloader)):
                 buffer_batch = batch.copy()
-                for task_key in batch:
-                    for key in buffer_batch[task_key]:
-                        buffer_batch[task_key][key] = buffer_batch[task_key][key].to(self.device)
-                # for key in buffer_batch["res_sel"]:
-                # 	buffer_batch["res_sel"][key] = buffer_batch["res_sel"][key].to(self.device)
+                for key in buffer_batch["res_sel"]:
+                    buffer_batch["res_sel"][key] = buffer_batch["res_sel"][key].to(self.device)
+                buffer_batch_dict = {'original': buffer_batch}
 
-                logits, loss = self.model(buffer_batch)
+                logits, loss = self.model(buffer_batch_dict)
                 pred = torch.sigmoid(logits).to("cpu").tolist()
 
                 rank_by_pred, pos_index, stack_scores = \

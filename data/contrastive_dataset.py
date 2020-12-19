@@ -5,6 +5,7 @@ import random
 import copy
 
 from torch.utils.data import Dataset
+from torch.utils.data.dataloader import default_collate
 
 from models.bert import tokenization_bert
 
@@ -55,6 +56,15 @@ class ContrastiveResponseSelectionDataset(Dataset):
                 except EOFError:
                     break
         print(utterance_len_dict)
+        integrated_input_examples = []
+        if split == 'train':
+            for i in range(0, len(self.input_examples), 2):  # training set 1:1
+                integrated_input_examples.append((self.input_examples[i], self.input_examples[i + 1]))
+        else:
+            for i in range(0, len(self.input_examples), 10):  # dev/test set 1:10
+                batch_data = tuple([self.input_examples[j] for j in range(i, i + 10)])
+                integrated_input_examples.append(batch_data)
+        self.input_examples = integrated_input_examples
         random.seed(self.hparams.random_seed)
         self.num_input_examples = len(self.input_examples)
         print("total %s examples" % split, self.num_input_examples)
@@ -85,24 +95,27 @@ class ContrastiveResponseSelectionDataset(Dataset):
           self.response = response
           self.label
         """
-        curr_example = self.input_examples[index]
-        current_feature = self._example_to_feature(index, curr_example)
+        if self.split == 'train':
+            positive_example, negative_example = self.input_examples[index]
+            positive_feature = self._example_to_feature(index, positive_example)
+            negative_feature = self._example_to_feature(index, negative_example)
+            features = {'original': (positive_feature, negative_feature)}
 
-        if self.hparams.do_contrastive and self.split == "train":
-            response1, response2 = curr_example.augments
-            curr_example_aug1, curr_example_aug2 = copy.deepcopy(curr_example), copy.deepcopy(curr_example)
-            curr_example_aug1.response = response1
-            curr_example_aug1.response_len = len(response1)
-            curr_example_aug2.response = response2
-            curr_example_aug2.response_len = len(response2)
-            current_feature_aug1 = self._example_to_feature(index, curr_example_aug1)
-            current_feature_aug2 = self._example_to_feature(index, curr_example_aug2)
-            for k in current_feature_aug1:
-                current_feature[k + '_aug1'] = current_feature_aug1[k]
-                current_feature[k + '_aug2'] = current_feature_aug2[k]
+            if self.hparams.do_contrastive:
+                pos_response_aug, neg_response_aug = positive_example.augments[0], negative_example.augments[0]
+                positive_example_aug, negative_example_aug = copy.deepcopy(positive_example), copy.deepcopy(negative_example)
+                positive_example_aug.response = pos_response_aug
+                positive_example_aug.response_len = len(pos_response_aug)
+                negative_example_aug.response = neg_response_aug
+                negative_example_aug.response_len = len(neg_response_aug)
+                positive_feature_aug = self._example_to_feature(index, positive_example_aug)
+                negative_feature_aug = self._example_to_feature(index, negative_example_aug)
+                features['augment'] = (positive_feature_aug, negative_feature_aug)
 
-        return current_feature
+        else:
+            features = [self._example_to_feature(index, example) for example in self.input_examples[index]]
 
+        return features
 
     def _example_to_feature(self, index, example):
         current_feature = dict()
@@ -470,3 +483,19 @@ class ContrastiveResponseSelectionDataset(Dataset):
                 response.pop()
 
         return dialog_context, response
+
+    @staticmethod
+    def collate_fn(batch):
+        if isinstance(batch[0], dict):  # train
+            feature_dict = {}
+            for example in batch:
+                for example_group, (pos_example, neg_example) in example.items():
+                    group_example_list = feature_dict.get(example_group, [])
+                    group_example_list.extend([pos_example, neg_example])
+                    feature_dict[example_group] = group_example_list
+            ret = {}
+            for example_group in feature_dict:
+                ret[example_group] = default_collate(feature_dict[example_group])
+        else:  # dev & test
+            ret = default_collate(batch[0])
+        return ret

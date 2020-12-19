@@ -52,7 +52,8 @@ MULTI_TASK_TYPE_MAP = {
     "ins": INSERTION_PARAMS,
     "del": DELETION_PARAMS,
     "srch": SEARCH_PARAMS,
-    'contras': CONTRASTIVE_PARAMS,
+    "contras": CONTRASTIVE_PARAMS,
+    "aug": AUGMENT_PARAMS,
 }
 
 
@@ -130,12 +131,14 @@ if __name__ == '__main__':
                             help="Evaluation Checkpoint", default="")
     arg_parser.add_argument("--training_type", dest="training_type", type=str, default="fine_tuning",
                             help="fine_tuning or post_training")
-    arg_parser.add_argument("--multi_task_type", dest="multi_task_type", type=str, default="contras",
-                            help="ins,del,srch,contras")
+    arg_parser.add_argument("--multi_task_type", dest="multi_task_type", type=str, default="",
+                            help="ins,del,srch,contras,aug")
     arg_parser.add_argument("--gpu_ids", dest="gpu_ids", type=str,
                             help="gpu_ids", default="0")
     arg_parser.add_argument("--electra_gen_config", dest="electra_gen_config", type=str,
                             help="electra_gen_config", default="")  # electra-base-gen, electra-base-chinese-gen
+    arg_parser.add_argument("--use_batch_negative", dest="use_batch_negative", type=bool, default=False,
+                            help="Use all examples in the batch as negative for contrastive learning")
 
     args = arg_parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_ids
@@ -151,6 +154,7 @@ if __name__ == '__main__':
     hparams["task_name"] = args.task_name
     hparams["task_type"] = args.task_type
     hparams["training_type"] = args.training_type
+    hparams["use_batch_negative"] = args.use_batch_negative
 
     if len(args.electra_gen_config) > 0:
         hparams["electra_gen_config"] = args.electra_gen_config

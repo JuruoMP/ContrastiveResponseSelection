@@ -37,7 +37,8 @@ class ContrastiveResponseSelection(object):
             batch_size=self.hparams.train_batch_size,
             num_workers=self.hparams.cpu_workers,
             shuffle=True,
-            drop_last=True
+            drop_last=True,
+            collate_fn=ContrastiveResponseSelectionDataset.collate_fn
         )
 
         print("""
@@ -177,7 +178,7 @@ class ContrastiveResponseSelection(object):
                 accu_cnt += 1
 
                 # TODO: virtual batch implementation
-                accu_batch += buffer_batch["res_sel"]["label"].shape[0]
+                accu_batch += buffer_batch["original"]["res_sel"]["label"].shape[0]
 
                 if self.hparams.virtual_batch_size == accu_batch \
                         or batch_idx == (len(self.train_dataset) // self.hparams.train_batch_size):  # last batch
@@ -200,11 +201,11 @@ class ContrastiveResponseSelection(object):
                     #     accu_res_sel_loss / accu_cnt, accu_ins_loss / accu_cnt, accu_del_loss / accu_cnt,
                     #     accu_srch_loss / accu_cnt,
                     #     self.optimizer.param_groups[0]['lr'])
-                    description = "[Epoch:{:2d}][Iter:{:3d}][Loss: {:.3f}]" \
-                                  "[CL/Res/Ins/Del/Srch: {:.3f}/{:.3f}/{:.3f}/{:.3f}/{:.3f}][lr: {:.1e}]".format(
+                    description = "[Epoch:{:2d}][Iter:{:3d}][Loss: {:.2e}]" \
+                                  "[Res/CL/Ins/Del/Srch: {:.2e}/{:.2e}/{:.2e}/{:.2e}/{:.2e}][lr: {:.2e}]".format(
                         epoch,
                         global_iteration_step, accu_loss / accu_cnt,
-                        accu_cl_loss / accu_cnt, accu_res_sel_loss / accu_cnt, accu_ins_loss / accu_cnt,
+                        accu_res_sel_loss / accu_cnt, accu_cl_loss / accu_cnt, accu_ins_loss / accu_cnt,
                         accu_del_loss / accu_cnt, accu_srch_loss / accu_cnt,
                         self.optimizer.param_groups[0]['lr'])
                     tqdm_batch_iterator.set_description(description)
@@ -212,7 +213,7 @@ class ContrastiveResponseSelection(object):
                     # tensorboard
                     if global_iteration_step % self.hparams.tensorboard_step == 0:
                         self._logger.info(description)
-                        accu_loss, accu_res_sel_loss, accu_ins_loss, accu_del_loss, accu_srch_loss, accu_cnt = 0, 0, 0, 0, 0, 0
+                        accu_loss, accu_cl_loss, accu_res_sel_loss, accu_ins_loss, accu_del_loss, accu_srch_loss, accu_cnt = 0, 0, 0, 0, 0, 0, 0
 
             # -------------------------------------------------------------------------
             #   ON EPOCH END  (checkpointing and validation)
