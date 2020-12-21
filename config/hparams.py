@@ -118,7 +118,7 @@ BASE_PARAMS = defaultdict(
     save_dirpath='checkpoints/',  # /path/to/checkpoints
 
     load_pthpath="",
-    cpu_workers=0,
+    cpu_workers=4,
     tensorboard_step=100,
     evaluate_print_step=100,
     random_seed=random.sample(range(1000, 10000), 1)[0],  # 3143

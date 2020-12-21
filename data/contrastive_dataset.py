@@ -27,7 +27,6 @@ class ContrastiveResponseSelectionDataset(Dataset):
 
         self.hparams = hparams
         self.split = split
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         # read pkls -> Input Examples
         self.input_examples = []
@@ -121,11 +120,11 @@ class ContrastiveResponseSelectionDataset(Dataset):
         current_feature = dict()
         anno_sent, segment_ids, attention_mask, eot_pos = self._annotate_sentence(example)
         current_feature["res_sel"] = dict()
-        current_feature["res_sel"]["anno_sent"] = torch.tensor(anno_sent).long().to(self.device)
-        current_feature["res_sel"]["segment_ids"] = torch.tensor(segment_ids).long().to(self.device)
-        current_feature["res_sel"]["attention_mask"] = torch.tensor(attention_mask).long().to(self.device)
-        current_feature["res_sel"]["eot_pos"] = torch.tensor(eot_pos).long().to(self.device)
-        current_feature["res_sel"]["label"] = torch.tensor(example.label).float().to(self.device)
+        current_feature["res_sel"]["anno_sent"] = torch.tensor(anno_sent).long()
+        current_feature["res_sel"]["segment_ids"] = torch.tensor(segment_ids).long()
+        current_feature["res_sel"]["attention_mask"] = torch.tensor(attention_mask).long()
+        current_feature["res_sel"]["eot_pos"] = torch.tensor(eot_pos).long()
+        current_feature["res_sel"]["label"] = torch.tensor(example.label).float()
 
         # when the response is the ground truth, append it to utterances.
         if int(example.label) == 1:
@@ -137,11 +136,11 @@ class ContrastiveResponseSelectionDataset(Dataset):
         if self.hparams.do_sent_insertion and (self.split == "train" or self.hparams.pca_visualization):
             anno_sent, segment_ids, attention_mask, ins_pos, target_idx = self._insertion_annotate_sentence(example)
             current_feature["ins"] = dict()
-            current_feature["ins"]["anno_sent"] = torch.tensor(anno_sent).long().to(self.device)
-            current_feature["ins"]["segment_ids"] = torch.tensor(segment_ids).long().to(self.device)
-            current_feature["ins"]["attention_mask"] = torch.tensor(attention_mask).long().to(self.device)
-            current_feature["ins"]["ins_pos"] = torch.tensor(ins_pos).long().to(self.device)
-            current_feature["ins"]["label"] = torch.tensor(target_idx).long().to(self.device)
+            current_feature["ins"]["anno_sent"] = torch.tensor(anno_sent).long()
+            current_feature["ins"]["segment_ids"] = torch.tensor(segment_ids).long()
+            current_feature["ins"]["attention_mask"] = torch.tensor(attention_mask).long()
+            current_feature["ins"]["ins_pos"] = torch.tensor(ins_pos).long()
+            current_feature["ins"]["label"] = torch.tensor(target_idx).long()
 
         if self.hparams.do_sent_deletion and (self.split == "train" or self.hparams.pca_visualization):
             while True:
@@ -151,20 +150,20 @@ class ContrastiveResponseSelectionDataset(Dataset):
                     break
             anno_sent, segment_ids, attention_mask, del_pos, target_idx = self._deletion_annotate_sentence(example, target_example)
             current_feature["del"] = dict()
-            current_feature["del"]["anno_sent"] = torch.tensor(anno_sent).long().to(self.device)
-            current_feature["del"]["segment_ids"] = torch.tensor(segment_ids).long().to(self.device)
-            current_feature["del"]["attention_mask"] = torch.tensor(attention_mask).long().to(self.device)
-            current_feature["del"]["del_pos"] = torch.tensor(del_pos).long().to(self.device)
-            current_feature["del"]["label"] = torch.tensor(target_idx).long().to(self.device)
+            current_feature["del"]["anno_sent"] = torch.tensor(anno_sent).long()
+            current_feature["del"]["segment_ids"] = torch.tensor(segment_ids).long()
+            current_feature["del"]["attention_mask"] = torch.tensor(attention_mask).long()
+            current_feature["del"]["del_pos"] = torch.tensor(del_pos).long()
+            current_feature["del"]["label"] = torch.tensor(target_idx).long()
 
         if self.hparams.do_sent_search and (self.split == "train" or self.hparams.pca_visualization):
             anno_sent, segment_ids, attention_mask, srch_pos, target_idx = self._search_annotate_sentence(example)
             current_feature["srch"] = dict()
-            current_feature["srch"]["anno_sent"] = torch.tensor(anno_sent).long().to(self.device)
-            current_feature["srch"]["segment_ids"] = torch.tensor(segment_ids).long().to(self.device)
-            current_feature["srch"]["attention_mask"] = torch.tensor(attention_mask).long().to(self.device)
-            current_feature["srch"]["srch_pos"] = torch.tensor(srch_pos).long().to(self.device)
-            current_feature["srch"]["label"] = torch.tensor(target_idx).long().to(self.device)
+            current_feature["srch"]["anno_sent"] = torch.tensor(anno_sent).long()
+            current_feature["srch"]["segment_ids"] = torch.tensor(segment_ids).long()
+            current_feature["srch"]["attention_mask"] = torch.tensor(attention_mask).long()
+            current_feature["srch"]["srch_pos"] = torch.tensor(srch_pos).long()
+            current_feature["srch"]["label"] = torch.tensor(target_idx).long()
 
         return current_feature
 
