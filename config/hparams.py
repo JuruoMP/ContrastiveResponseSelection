@@ -62,7 +62,7 @@ BASE_PARAMS = defaultdict(
     # gpu_ids=[0],  # [0,1,2,3]
 
     # Input params
-    train_batch_size=4,  # 32
+    train_batch_size=16,  # 32
     eval_batch_size=250,  # 1000
     virtual_batch_size=32,
 
@@ -120,7 +120,7 @@ BASE_PARAMS = defaultdict(
     load_pthpath="",
     cpu_workers=4,
     tensorboard_step=100,
-    evaluate_print_step=100,
+    evaluate_print_step=1000,
     random_seed=random.sample(range(1000, 10000), 1)[0],  # 3143
 )
 
