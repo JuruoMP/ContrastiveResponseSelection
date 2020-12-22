@@ -2,6 +2,7 @@ import os
 import argparse
 import collections
 import logging
+import json
 from datetime import datetime
 
 from config.hparams import *
@@ -57,9 +58,14 @@ MULTI_TASK_TYPE_MAP = {
 }
 
 
-def init_logger(path: str):
+def init_logger(path: str, hparams):
     if not os.path.exists(path):
         os.makedirs(path)
+    hparams = dict(hparams)
+    del hparams['pretrained_config']
+    del hparams['pretrained_model']
+    json.dump(hparams, open(os.path.join(path, 'config.txt'), 'w', encoding='utf-8'), indent=2)
+
     logger = logging.getLogger()
     logger.handlers = []
     logger.setLevel(logging.DEBUG)
@@ -89,7 +95,7 @@ def init_logger(path: str):
 def train_model(args, hparams):
     timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
     root_dir = os.path.join(hparams["root_dir"], args.model, args.task_name, "%s/" % timestamp)
-    logger = init_logger(root_dir)
+    logger = init_logger(root_dir, hparams)
     logger.info("Hyper-parameters: %s" % str(hparams))
     hparams["root_dir"] = root_dir
 
