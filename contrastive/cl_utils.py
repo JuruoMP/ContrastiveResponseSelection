@@ -1,22 +1,30 @@
-from tqdm import tqdm
 import torch
+from tqdm import tqdm
+
+from contrastive.eda.augment_util import EDAUtil
 
 
 class ContrastiveUtils:
-    def __init__(self):
-        en2de = torch.hub.load('pytorch/fairseq', 'transformer.wmt19.en-de.single_model', tokenizer='moses',
-                               bpe='fastbpe').cuda()
-        de2en = torch.hub.load('pytorch/fairseq', 'transformer.wmt19.de-en.single_model', tokenizer='moses',
-                               bpe='fastbpe').cuda()
-        en2ru = torch.hub.load('pytorch/fairseq', 'transformer.wmt19.en-ru.single_model', tokenizer='moses',
-                               bpe='fastbpe').cuda()
-        ru2en = torch.hub.load('pytorch/fairseq', 'transformer.wmt19.ru-en.single_model', tokenizer='moses',
-                               bpe='fastbpe').cuda()
+    def __init__(self, lang='en'):
+        if lang == 'en':
+            en2de = torch.hub.load('pytorch/fairseq', 'transformer.wmt19.en-de.single_model', tokenizer='moses',
+                                   bpe='fastbpe').cuda()
+            de2en = torch.hub.load('pytorch/fairseq', 'transformer.wmt19.de-en.single_model', tokenizer='moses',
+                                   bpe='fastbpe').cuda()
+            en2ru = torch.hub.load('pytorch/fairseq', 'transformer.wmt19.en-ru.single_model', tokenizer='moses',
+                                   bpe='fastbpe').cuda()
+            ru2en = torch.hub.load('pytorch/fairseq', 'transformer.wmt19.ru-en.single_model', tokenizer='moses',
+                                   bpe='fastbpe').cuda()
 
-        self.translation_model = {
-            'de': (en2de, de2en),
-            'ru': (en2ru, ru2en)
-        }
+            self.translation_model = {
+                'de': (en2de, de2en),
+                'ru': (en2ru, ru2en)
+            }
+        elif lang == 'zh':
+            self.eda_util = EDAUtil(num_augment=2, alpha=0.05, lang='zh')
+
+    def eda_augment(self, x):
+        return self.eda_util.augment_sentence(x)
 
     def back_translation_augmentation(self, x):
         translations = []
@@ -42,7 +50,10 @@ class ContrastiveUtils:
 
 
 if __name__ == '__main__':
-    cl_util = ContrastiveUtils()
-    uttrs = ['who am i', 'do you know which one is better', 'please help me to acceluate this program']
-    ret = cl_util.batch_back_translation_augmentation(uttrs)
+    # cl_util = ContrastiveUtils()
+    # uttrs = ['who am i', 'do you know which one is better', 'please help me to acceluate this program']
+    # ret = cl_util.batch_back_translation_augmentation(uttrs)
+    # print(ret)
+    cl_util = ContrastiveUtils(lang='zh')
+    ret = cl_util.eda_augment('我 去 不 早 说 发韵 达 能 到 我家 那儿 我 就 能 拿到'.replace(' ', ''))
     print(ret)

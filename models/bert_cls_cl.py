@@ -4,7 +4,7 @@ import torch.nn as nn
 from models.bert_insertion import BertInsertion
 from models.bert_deletion import BertDeletion
 from models.bert_search import BertSearch
-from models.contrastive_loss import NTXentLoss, ConditionalNTXentLoss
+from models.contrastive_loss import NTXentLoss, DynamicConditionalNTXentLoss
 
 
 class BertCls(nn.Module):
@@ -59,7 +59,7 @@ class BertCls(nn.Module):
         if self.hparams.use_batch_negative:
             self._nt_xent_criterion = NTXentLoss(temperature=0.5, use_cosine_similarity=True)
         else:
-            self._nt_xent_criterion = ConditionalNTXentLoss(temperature=0.5, use_cosine_similarity=True)
+            self._nt_xent_criterion = DynamicConditionalNTXentLoss(temperature=0.5, use_cosine_similarity=True)
 
     def forward(self, batch_data):
         logits, res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss = None, None, None, None, None, None

@@ -32,7 +32,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
         self.input_examples = []
         utterance_len_dict = dict()
 
-        with open(os.path.join(hparams.data_dir, "%s_%s.pkl" % (hparams.task_name, split)), "rb") as pkl_handle:
+        with open(os.path.join(hparams.data_dir, "%s_%s_aug.pkl" % (hparams.task_name, split)), "rb") as pkl_handle:
 
             while True:
                 try:

@@ -1,15 +1,14 @@
 import logging
-
 import math
-from tqdm import tqdm
-import numpy as np
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
-from models import Model
 from data.contrastive_dataset import ContrastiveResponseSelectionDataset
+from models import Model
 from models.utils.checkpointing import load_checkpoint
 from models.utils.scorer import calculate_candidates_ranking, logits_mrr, \
     logits_recall_at_k, precision_at_one, mean_average_precision
@@ -122,7 +121,7 @@ class ContrastiveEvaluation(object):
                 if (batch_idx + 1) % self.hparams.evaluate_print_step == 0:
                     for i in range(len(k_list)):
                         recall_result += "Recall@%s : " % k_list[i] + "%.2f%% | " % (
-                                    (total_correct[i] / total_examples) * 100)
+                                (total_correct[i] / total_examples) * 100)
                     else:
                         print("%d[th] | %s | MRR : %.3f | P@1 : %.3f | MAP : %.3f" %
                               (batch_idx + 1, recall_result, float(total_mrr / total_examples),

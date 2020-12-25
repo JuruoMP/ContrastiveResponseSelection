@@ -7,16 +7,18 @@ from tqdm import tqdm
 
 from transformers import AutoTokenizer
 from models.bert import tokenization_bert
+from contrastive.cl_utils import ContrastiveUtils
 
 
 class InputExamples(object):
-    def __init__(self, utterances, response, label, seq_lengths):
+    def __init__(self, utterances, response, label, seq_lengths, augments=None):
         self.utterances = utterances
         self.response = response
         self.label = label
 
         self.dialog_len = seq_lengths[0]
         self.response_len = seq_lengths[1]
+        self.augments = augments
 
 
 class ECommerceDataUtils(object):
@@ -24,6 +26,7 @@ class ECommerceDataUtils(object):
         # bert_tokenizer init
         self.txt_path = txt_path
         self._bert_tokenizer_init(bert_pretrained_dir, bert_pretrained)
+        self.contrastive_util = ContrastiveUtils(lang='zh')
 
     def _bert_tokenizer_init(self, bert_pretrained_dir, bert_pretrained='bert-base-uncased'):
 
@@ -43,8 +46,9 @@ class ECommerceDataUtils(object):
 
         return data
 
-    def make_examples_pkl(self, data, pkl_path):
-
+    def make_examples_pkl(self, data, pkl_path, do_augment=True):
+        if do_augment:
+            pkl_path = pkl_path[:-4] + '_aug.pkl'
         with open(pkl_path, "wb") as pkl_handle:
             for dialog in tqdm(data):
                 dialog_data = dialog.split("\t")
@@ -58,9 +62,17 @@ class ECommerceDataUtils(object):
                     dialog_len.append(len(utt_tok))
                 response = self._bert_tokenizer.tokenize(dialog_data[-1])
 
+                augments = None
+                if do_augment:
+                    response_augs = self.contrastive_util.eda_augment(dialog_data[-1].replace(' ', ''))
+                    response_aug1, response_aug2 = [x.replace(' ', '') for x in response_augs]
+                    response_aug1 = self._bert_tokenizer.tokenize(response_aug1)
+                    response_aug2 = self._bert_tokenizer.tokenize(response_aug2)
+                    augments = response_aug1, response_aug2
+
                 pickle.dump(InputExamples(
                     utterances=utterances, response=response, label=int(label),
-                    seq_lengths=(dialog_len, len(response))), pkl_handle)
+                    seq_lengths=(dialog_len, len(response)), augments=augments), pkl_handle)
 
         print(pkl_path, " save completes!")
 
@@ -76,4 +88,4 @@ if __name__ == '__main__':
     # response seleciton fine-tuning pkl creation
     for data_type in ["dev", "test", "train"]:
         data = ecommerce_utils.read_raw_file(data_type)
-        ecommerce_utils.make_examples_pkl(data, ecommerce_pkl_path % data_type)
+        ecommerce_utils.make_examples_pkl(data, ecommerce_pkl_path % data_type, do_augment=True)

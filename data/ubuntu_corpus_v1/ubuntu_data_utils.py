@@ -6,7 +6,6 @@ import pickle
 from tqdm import tqdm
 
 from models.bert import tokenization_bert
-
 from contrastive.cl_utils import ContrastiveUtils
 
 
@@ -26,7 +25,7 @@ class UbuntuDataUtils(object):
         # bert_tokenizer init
         self.txt_path = txt_path
         self._bert_tokenizer_init(bert_pretrained_dir, bert_pretrained)
-        self.contrastive_util = ContrastiveUtils()
+        self.contrastive_util = ContrastiveUtils(lang='en')
 
     def _bert_tokenizer_init(self, bert_pretrained_dir, bert_pretrained='bert-base-uncased'):
 
@@ -45,7 +44,9 @@ class UbuntuDataUtils(object):
 
         return data
 
-    def make_examples_pkl(self, data, ubuntu_pkl_path):
+    def make_examples_pkl(self, data, ubuntu_pkl_path, do_augment=True):
+        if do_augment:
+            ubuntu_pkl_path = ubuntu_pkl_path[:-4] + '_aug.pkl'
         responses = []
         for dialog in tqdm(data):
             dialog_data = dialog.split("\t")
@@ -63,12 +64,14 @@ class UbuntuDataUtils(object):
                     utt_tok = self._bert_tokenizer.tokenize(utt)
                     utterances.append(utt_tok)
                     dialog_len.append(len(utt_tok))
-
                 response = self._bert_tokenizer.tokenize(dialog_data[-1])
-                response_aug1, response_aug2 = responses_augs[dialog_idx]
-                response_aug1 = self._bert_tokenizer.tokenize(response_aug1)
-                response_aug2 = self._bert_tokenizer.tokenize(response_aug2)
-                augments = response_aug1, response_aug2
+
+                augments = None
+                if do_augment:
+                    response_aug1, response_aug2 = responses_augs[dialog_idx]
+                    response_aug1 = self._bert_tokenizer.tokenize(response_aug1)
+                    response_aug2 = self._bert_tokenizer.tokenize(response_aug2)
+                    augments = response_aug1, response_aug2
 
                 pickle.dump(InputExamples(
                     utterances=utterances, response=response, label=int(label),
@@ -88,4 +91,4 @@ if __name__ == '__main__':
     # response seleciton fine-tuning pkl creation
     for data_type in ["train", "valid", "test"]:
         data = ubuntu_utils.read_raw_file(data_type)
-        ubuntu_utils.make_examples_pkl(data, ubuntu_pkl_path % data_type)
+        ubuntu_utils.make_examples_pkl(data, ubuntu_pkl_path % data_type, do_augment=True)

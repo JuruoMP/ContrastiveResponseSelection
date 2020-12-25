@@ -10,8 +10,8 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
 
-from data.contrastive_dataset import ContrastiveResponseSelectionDataset
 from contrastive.cl_evaluation import ContrastiveEvaluation
+from data.contrastive_dataset import ContrastiveResponseSelectionDataset
 from models import Model
 from models.utils.checkpointing import CheckpointManager, load_checkpoint
 
@@ -205,8 +205,9 @@ class ContrastiveResponseSelection(object):
                                   "[Res/CL/Ins/Del/Srch: {:.2e}/{:.2e}/{:.2e}/{:.2e}/{:.2e}][lr: {:.2e}]".format(
                         epoch,
                         global_iteration_step, accu_loss / accu_cnt,
-                        accu_res_sel_loss / accu_cnt, accu_cl_loss / accu_cnt, accu_ins_loss / accu_cnt,
-                        accu_del_loss / accu_cnt, accu_srch_loss / accu_cnt,
+                                               accu_res_sel_loss / accu_cnt, accu_cl_loss / accu_cnt,
+                                               accu_ins_loss / accu_cnt,
+                                               accu_del_loss / accu_cnt, accu_srch_loss / accu_cnt,
                         self.optimizer.param_groups[0]['lr'])
                     tqdm_batch_iterator.set_description(description)
 

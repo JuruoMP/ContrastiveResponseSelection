@@ -105,6 +105,7 @@ BASE_PARAMS = defaultdict(
     do_contrastive=False,  # True for contrastive learning
     use_batch_negative=False,
     do_augment_response_selection=False,
+    dynamic_temperature=None,
 
     max_sequence_len=512,
     res_sel_loss_ratio=1.0,
