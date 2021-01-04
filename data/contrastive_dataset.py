@@ -32,7 +32,11 @@ class ContrastiveResponseSelectionDataset(Dataset):
         self.input_examples = []
         utterance_len_dict = dict()
 
-        with open(os.path.join(hparams.data_dir, "%s_%s_aug.pkl" % (hparams.task_name, split)), "rb") as pkl_handle:
+        if self.split == 'train':
+            data_path = os.path.join(hparams.data_dir, "%s_%s_aug_retrieve.pkl" % (hparams.task_name, split))
+        else:
+            data_path = os.path.join(hparams.data_dir, "%s_%s_aug.pkl" % (hparams.task_name, split))
+        with open(data_path, "rb") as pkl_handle:
 
             while True:
                 try:
@@ -110,6 +114,14 @@ class ContrastiveResponseSelectionDataset(Dataset):
                 positive_feature_aug = self._example_to_feature(index, positive_example_aug)
                 negative_feature_aug = self._example_to_feature(index, negative_example_aug)
                 features['augment'] = (positive_feature_aug, negative_feature_aug)
+
+            if self.split == 'train' and self.hparams.do_rank_loss:
+                retrieve_response = positive_example.retrieve
+                retrieve_example = copy.deepcopy(positive_example)
+                retrieve_example.response = retrieve_response
+                retrieve_example.response_len = len(retrieve_response)
+                retrieve_feature = self._example_to_feature(index, retrieve_example)
+                features['retrieve'] = retrieve_feature
 
         else:
             features = [self._example_to_feature(index, example) for example in self.input_examples[index]]
@@ -487,11 +499,17 @@ class ContrastiveResponseSelectionDataset(Dataset):
     def collate_fn(batch):
         if isinstance(batch[0], dict):  # train
             feature_dict = {}
+            for key in batch[0]:
+                feature_dict[key] = []
             for example in batch:
-                for example_group, (pos_example, neg_example) in example.items():
-                    group_example_list = feature_dict.get(example_group, [])
-                    group_example_list.extend([pos_example, neg_example])
-                    feature_dict[example_group] = group_example_list
+                for group in ('original', 'augment'):
+                    pos_example, neg_example = example[group]
+                    feature_dict[group].extend([pos_example, neg_example])
+                    # group_example_list = feature_dict.get(group, [])
+                    # group_example_list.extend([pos_example, neg_example])
+                    # feature_dict[group] = group_example_list
+                if 'retrieve' in feature_dict:
+                    feature_dict['retrieve'].append(example['retrieve'])
             ret = {}
             for example_group in feature_dict:
                 ret[example_group] = default_collate(feature_dict[example_group])

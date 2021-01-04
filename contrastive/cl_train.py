@@ -130,7 +130,8 @@ class ContrastiveResponseSelection(object):
 
         train_begin = datetime.utcnow()  # New
         global_iteration_step = 0
-        accu_loss, accu_cl_loss, accu_res_sel_loss, accu_ins_loss, accu_del_loss, accu_srch_loss = 0, 0, 0, 0, 0, 0
+        accu_loss, accu_res_sel_loss, accu_ins_loss, accu_del_loss, accu_srch_loss = 0, 0, 0, 0, 0
+        accu_cl_loss, accu_rank_loss = 0, 0
         accu_cnt = 0
 
         for epoch in range(self.start_epoch, self.hparams.num_epochs + 1):
@@ -146,7 +147,7 @@ class ContrastiveResponseSelection(object):
 
                 buffer_batch = batch
                 _, losses = self.model(buffer_batch)
-                res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss = losses
+                res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss, rank_loss = losses
                 if res_sel_loss is not None:
                     res_sel_loss = self.hparams.res_sel_loss_ratio * res_sel_loss.mean()
                     accu_res_sel_loss += res_sel_loss.item()
@@ -172,6 +173,11 @@ class ContrastiveResponseSelection(object):
                     cl_loss = self.hparams.cl_loss_ratio * contrastive_loss.mean()
                     accu_cl_loss += cl_loss.item()
                     loss += cl_loss
+
+                if self.hparams.do_rank_loss:
+                    rank_loss = self.hparams.rank_loss_ratio * rank_loss.mean()
+                    accu_rank_loss += rank_loss.item()
+                    loss += rank_loss
 
                 loss.backward()
                 accu_loss += loss.item()
@@ -202,12 +208,11 @@ class ContrastiveResponseSelection(object):
                     #     accu_srch_loss / accu_cnt,
                     #     self.optimizer.param_groups[0]['lr'])
                     description = "[Epoch:{:2d}][Iter:{:3d}][Loss: {:.2e}]" \
-                                  "[Res/CL/Ins/Del/Srch: {:.2e}/{:.2e}/{:.2e}/{:.2e}/{:.2e}][lr: {:.2e}]".format(
+                                  "[Res/CL/Rank/Ins/Del/Srch: {:.2e}/{:.2e}/{:.2e}/{:.2e}/{:.2e}/{:.2e}][lr: {:.2e}]".format(
                         epoch,
-                        global_iteration_step, accu_loss / accu_cnt,
-                                               accu_res_sel_loss / accu_cnt, accu_cl_loss / accu_cnt,
-                                               accu_ins_loss / accu_cnt,
-                                               accu_del_loss / accu_cnt, accu_srch_loss / accu_cnt,
+                        global_iteration_step, accu_loss / accu_cnt, accu_res_sel_loss / accu_cnt,
+                        accu_cl_loss / accu_cnt, accu_rank_loss / accu_cnt,
+                        accu_ins_loss / accu_cnt, accu_del_loss / accu_cnt, accu_srch_loss / accu_cnt,
                         self.optimizer.param_groups[0]['lr'])
                     tqdm_batch_iterator.set_description(description)
 

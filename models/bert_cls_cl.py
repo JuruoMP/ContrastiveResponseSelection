@@ -1,10 +1,11 @@
 import os
+import torch
 import torch.nn as nn
 
 from models.bert_insertion import BertInsertion
 from models.bert_deletion import BertDeletion
 from models.bert_search import BertSearch
-from models.contrastive_loss import NTXentLoss, DynamicConditionalNTXentLoss
+from models.contrastive_loss import NTXentLoss, ConditionalNTXentLoss
 
 
 class BertCls(nn.Module):
@@ -59,23 +60,24 @@ class BertCls(nn.Module):
         if self.hparams.use_batch_negative:
             self._nt_xent_criterion = NTXentLoss(temperature=0.5, use_cosine_similarity=True)
         else:
-            self._nt_xent_criterion = DynamicConditionalNTXentLoss(temperature=0.5, use_cosine_similarity=True)
+            self._nt_xent_criterion = ConditionalNTXentLoss(temperature=0.5, use_cosine_similarity=True)
+        self.hinge_lambda = 0.4
 
     def forward(self, batch_data):
-        logits, res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss = None, None, None, None, None, None
+        logits, res_sel_loss, ins_loss, del_loss, srch_loss = None, None, None, None, None
+        contrastive_loss, rank_loss = None, None
 
         batch = batch_data['original']
-        if self.hparams.do_response_selection:
-            outputs = self._model(
-                batch["res_sel"]["anno_sent"],
-                token_type_ids=batch["res_sel"]["segment_ids"],
-                attention_mask=batch["res_sel"]["attention_mask"]
-            )
-            bert_outputs = outputs[0]
-            cls_logits = bert_outputs[:, 0, :]  # bs, bert_output_size
-            logits = self._classification(cls_logits)  # bs, 1
-            logits = logits.squeeze(-1)
-            res_sel_loss = self._criterion(logits, batch["res_sel"]["label"])
+        outputs = self._model(
+            batch["res_sel"]["anno_sent"],
+            token_type_ids=batch["res_sel"]["segment_ids"],
+            attention_mask=batch["res_sel"]["attention_mask"]
+        )
+        bert_outputs = outputs[0]
+        cls_logits = bert_outputs[:, 0, :]  # bs, bert_output_size
+        logits = self._classification(cls_logits)  # bs, 1
+        logits = logits.squeeze(-1)
+        res_sel_loss = self._criterion(logits, batch["res_sel"]["label"])
 
         if self.hparams.do_sent_insertion and (self.training or self.hparams.pca_visualization):
             ins_loss = self._bert_insertion(batch["ins"], batch["res_sel"]["label"])
@@ -102,4 +104,16 @@ class BertCls(nn.Module):
                 logits_aug = logits_aug.squeeze(-1)
                 res_sel_loss = (res_sel_loss + self._criterion(logits_aug, batch_aug["res_sel"]["label"])) / 2
 
-        return logits, (res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss)
+        if self.hparams.do_rank_loss and self.training:
+            batch_retrieve = batch_data['retrieve']
+            outputs_retrieve = self._model(
+                batch_retrieve["res_sel"]["anno_sent"],
+                token_type_ids=batch_retrieve["res_sel"]["segment_ids"],
+                attention_mask=batch_retrieve["res_sel"]["attention_mask"]
+            )
+            cls_logits_retrieve = outputs_retrieve[0][:, 0, :]
+            logits_retrieve = self._classification(cls_logits_retrieve).squeeze(-1)
+            positive_logits = logits.masked_select(batch["res_sel"]["label"].bool())
+            rank_loss = torch.clamp(self.hinge_lambda + logits_retrieve - positive_logits, min=0).mean()
+
+        return logits, (res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss, rank_loss)

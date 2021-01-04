@@ -55,6 +55,9 @@ CONTRASTIVE_PARAMS = defaultdict(
 AUGMENT_PARAMS = defaultdict(
     do_augment_response_selection=True,
 )
+RANK_PARAMS = defaultdict(
+    do_rank_loss=True,
+)
 
 BASE_PARAMS = defaultdict(
     # lambda: None,  # Set default value to None.
@@ -105,7 +108,7 @@ BASE_PARAMS = defaultdict(
     do_contrastive=False,  # True for contrastive learning
     use_batch_negative=False,
     do_augment_response_selection=False,
-    dynamic_temperature=None,
+    do_rank_loss=False,
 
     max_sequence_len=512,
     res_sel_loss_ratio=1.0,
@@ -113,6 +116,7 @@ BASE_PARAMS = defaultdict(
     del_loss_ratio=1.0,  # 0.01, 0.1, 0.5, 1,
     srch_loss_ratio=1.0,  # 0.01, 0.1, 0.5, 1,
     cl_loss_ratio=1.0,
+    rank_loss_ratio=1.0,
     projection_dim=256,
     max_utt_len=5,  # ubuntu : 5
 

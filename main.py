@@ -55,6 +55,7 @@ MULTI_TASK_TYPE_MAP = {
     "srch": SEARCH_PARAMS,
     "contras": CONTRASTIVE_PARAMS,
     "aug": AUGMENT_PARAMS,
+    "rank": RANK_PARAMS,
 }
 
 
@@ -138,7 +139,7 @@ if __name__ == '__main__':
     arg_parser.add_argument("--training_type", dest="training_type", type=str, default="fine_tuning",
                             help="fine_tuning or post_training")
     arg_parser.add_argument("--multi_task_type", dest="multi_task_type", type=str, default="",
-                            help="ins,del,srch,contras,aug")
+                            help="ins,del,srch,contras,aug,rank")
     arg_parser.add_argument("--gpu_ids", dest="gpu_ids", type=str,
                             help="gpu_ids", default="0")
     arg_parser.add_argument("--electra_gen_config", dest="electra_gen_config", type=str,
