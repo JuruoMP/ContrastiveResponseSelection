@@ -18,8 +18,6 @@ import torch
 from torch import nn, optim
 import json
 
-from apex import amp
-
 
 class CheckpointManager(object):
     """A checkpoint manager saves state dicts of model and optimizer
@@ -106,7 +104,6 @@ class CheckpointManager(object):
                 {
                     "model": self._model_state_dict(),
                     "optimizer": self.optimizer.state_dict(),
-                    "amp": amp.state_dict(),
                 },
                 self.ckpt_dirpath / f"checkpoint_{self.last_epoch}.pth",
             )
@@ -169,4 +166,4 @@ def load_checkpoint(checkpoint_pthpath):
     # load encoder, decoder, optimizer state_dicts
     components = torch.load(checkpoint_pthpath)
 
-    return components["model"], components["optimizer"], components["amp"]
+    return components["model"], components["optimizer"]

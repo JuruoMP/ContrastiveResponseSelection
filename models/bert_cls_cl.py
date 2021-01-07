@@ -1,6 +1,7 @@
 import os
 import torch
 import torch.nn as nn
+from torch.cuda import amp
 
 from models.bert_insertion import BertInsertion
 from models.bert_deletion import BertDeletion
@@ -63,6 +64,7 @@ class BertCls(nn.Module):
             self._nt_xent_criterion = ConditionalNTXentLoss(temperature=0.5, use_cosine_similarity=True)
         self.hinge_lambda = 0.4
 
+    @amp.autocast()
     def forward(self, batch_data):
         logits, res_sel_loss, ins_loss, del_loss, srch_loss = None, None, None, None, None
         contrastive_loss, rank_loss = None, None

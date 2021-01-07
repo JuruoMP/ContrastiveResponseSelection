@@ -5,11 +5,11 @@ from datetime import datetime
 import numpy as np
 import torch
 from torch import nn, optim
+from torch.cuda import amp
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
-from apex import amp
 
 from contrastive.cl_evaluation import ContrastiveEvaluation
 from data.contrastive_dataset import ContrastiveResponseSelectionDataset
@@ -57,6 +57,10 @@ class ContrastiveResponseSelection(object):
         self.model = Model(self.hparams)
         self.model = self.model.to(self.device)
 
+        # Use Multi-GPUs
+        if -1 not in self.hparams.gpu_ids and len(self.hparams.gpu_ids) > 1:
+            self.model = nn.DataParallel(self.model, self.hparams.gpu_ids)
+
         # =============================================================================
         #   CRITERION
         # =============================================================================
@@ -79,13 +83,7 @@ class ContrastiveResponseSelection(object):
             self.scheduler = get_linear_schedule_with_warmup(
                 self.optimizer, num_warmup_steps=self.hparams.warmup_steps,
                 num_training_steps=self.iterations * self.hparams.num_epochs)
-
-        # Set amp
-        self.model, self.optimizer = amp.initialize(self.model, self.optimizer, self.hparams.amp_opt_level)
-
-        # Use Multi-GPUs
-        if -1 not in self.hparams.gpu_ids and len(self.hparams.gpu_ids) > 1:
-            self.model = nn.DataParallel(self.model, self.hparams.gpu_ids)
+        self.scaler = amp.GradScaler()
 
     def _setup_training(self):
         if self.hparams.save_dirpath == 'checkpoints/':
@@ -100,13 +98,12 @@ class ContrastiveResponseSelection(object):
             # "path/to/checkpoint_xx.pth" -> xx
             self.start_epoch = int(self.hparams.load_pthpath.split("_")[-1][:-4])
             self.start_epoch += 1
-            model_state_dict, optimizer_state_dict, amp_state_dict = load_checkpoint(self.hparams.load_pthpath)
+            model_state_dict, optimizer_state_dict = load_checkpoint(self.hparams.load_pthpath)
             if isinstance(self.model, nn.DataParallel):
                 self.model.module.load_state_dict(model_state_dict)
             else:
                 self.model.load_state_dict(model_state_dict)
             self.optimizer.load_state_dict(optimizer_state_dict)
-            amp.load_state_dict(amp_state_dict)
             self.previous_model_path = self.hparams.load_pthpath
             print("Loaded model from {}".format(self.hparams.load_pthpath))
 
@@ -151,7 +148,8 @@ class ContrastiveResponseSelection(object):
                 #         buffer_batch[task_key][key] = buffer_batch[task_key][key].to(self.device)
 
                 buffer_batch = batch
-                _, losses = self.model(buffer_batch)
+                with amp.autocast():
+                    _, losses = self.model(buffer_batch)
                 res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss, rank_loss = losses
                 if res_sel_loss is not None:
                     res_sel_loss = self.hparams.res_sel_loss_ratio * res_sel_loss.mean()
@@ -169,23 +167,25 @@ class ContrastiveResponseSelection(object):
                     srch_loss = self.hparams.srch_loss_ratio * srch_loss.mean()
                     accu_srch_loss += srch_loss.item()
 
-                loss = res_sel_loss
+                loss = self.scaler.scale(res_sel_loss)
                 for task_tensor_loss in [ins_loss, del_loss, srch_loss]:
                     if task_tensor_loss is not None:
+                        task_tensor_loss = self.scaler.scale(task_tensor_loss)
                         loss = loss + task_tensor_loss
 
                 if self.hparams.do_contrastive:
                     cl_loss = self.hparams.cl_loss_ratio * contrastive_loss.mean()
                     accu_cl_loss += cl_loss.item()
+                    cl_loss = self.scaler.scale(cl_loss)
                     loss += cl_loss
 
                 if self.hparams.do_rank_loss:
                     rank_loss = self.hparams.rank_loss_ratio * rank_loss.mean()
                     accu_rank_loss += rank_loss.item()
+                    rank_loss = self.scaler.scale(rank_loss)
                     loss += rank_loss
 
-                with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                    scaled_loss.backward()
+                loss.backward()
                 accu_loss += loss.item()
                 accu_cnt += 1
 
@@ -195,11 +195,12 @@ class ContrastiveResponseSelection(object):
                 if self.hparams.virtual_batch_size == accu_batch \
                         or batch_idx == (len(self.train_dataset) // self.hparams.train_batch_size):  # last batch
 
-                    self.optimizer.step()
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
                     if self.hparams.optimizer_type == "AdamW":
                         self.scheduler.step()
 
-                    nn.utils.clip_grad_norm_(self.model.parameters(), self.hparams.max_gradient_norm)
+                    # nn.utils.clip_grad_norm_(self.model.parameters(), self.hparams.max_gradient_norm)
                     self.optimizer.zero_grad()
 
                     accu_batch = 0
