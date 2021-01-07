@@ -26,7 +26,7 @@ class UbuntuDataUtils(object):
         # bert_tokenizer init
         self.txt_path = txt_path
         self._bert_tokenizer_init(bert_pretrained_dir, bert_pretrained)
-        self.contrastive_util = ContrastiveUtils(lang='en')
+        # self.contrastive_util = ContrastiveUtils(lang='en')
 
     def _bert_tokenizer_init(self, bert_pretrained_dir, bert_pretrained='bert-base-uncased'):
 
@@ -94,7 +94,8 @@ class UbuntuDataUtils(object):
         retrieve_responses = open('data/ubuntu_corpus_v1/retrieve_response.txt', 'r', encoding='utf-8').readlines()
         with open(new_ubuntu_pkl_path, 'wb') as fw:
             with open(ubuntu_pkl_path, 'rb') as fr:
-                for example_idx in trange(500000):
+                for i in trange(1000000):
+                    example_idx = i // 2
                     example = pickle.load(fr)
                     retrieve_response = retrieve_responses[example_idx].strip()
                     retrieve = self._bert_tokenizer.tokenize(retrieve_response)

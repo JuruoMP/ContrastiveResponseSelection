@@ -114,6 +114,8 @@ class BertCls(nn.Module):
             cls_logits_retrieve = outputs_retrieve[0][:, 0, :]
             logits_retrieve = self._classification(cls_logits_retrieve).squeeze(-1)
             positive_logits = logits.masked_select(batch["res_sel"]["label"].bool())
-            rank_loss = torch.clamp(self.hinge_lambda + logits_retrieve - positive_logits, min=0).mean()
+            negative_logits = logits.masked_select((1 - batch["res_sel"]["label"]).bool())
+            rank_loss = torch.clamp(self.hinge_lambda + logits_retrieve - positive_logits, min=0).mean() + \
+                torch.clamp(self.hinge_lambda + negative_logits - logits_retrieve, min=0).mean()
 
         return logits, (res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss, rank_loss)
