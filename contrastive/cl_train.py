@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
+from apex import amp
 
 from contrastive.cl_evaluation import ContrastiveEvaluation
 from data.contrastive_dataset import ContrastiveResponseSelectionDataset
@@ -56,10 +57,6 @@ class ContrastiveResponseSelection(object):
         self.model = Model(self.hparams)
         self.model = self.model.to(self.device)
 
-        # Use Multi-GPUs
-        if -1 not in self.hparams.gpu_ids and len(self.hparams.gpu_ids) > 1:
-            self.model = nn.DataParallel(self.model, self.hparams.gpu_ids)
-
         # =============================================================================
         #   CRITERION
         # =============================================================================
@@ -83,6 +80,13 @@ class ContrastiveResponseSelection(object):
                 self.optimizer, num_warmup_steps=self.hparams.warmup_steps,
                 num_training_steps=self.iterations * self.hparams.num_epochs)
 
+        # Set amp
+        self.model, self.optimizer = amp.initialize(self.model, self.optimizer, self.hparams.amp_opt_level)
+
+        # Use Multi-GPUs
+        if -1 not in self.hparams.gpu_ids and len(self.hparams.gpu_ids) > 1:
+            self.model = nn.DataParallel(self.model, self.hparams.gpu_ids)
+
     def _setup_training(self):
         if self.hparams.save_dirpath == 'checkpoints/':
             self.save_dirpath = os.path.join(self.hparams.root_dir, self.hparams.save_dirpath)
@@ -96,12 +100,13 @@ class ContrastiveResponseSelection(object):
             # "path/to/checkpoint_xx.pth" -> xx
             self.start_epoch = int(self.hparams.load_pthpath.split("_")[-1][:-4])
             self.start_epoch += 1
-            model_state_dict, optimizer_state_dict = load_checkpoint(self.hparams.load_pthpath)
+            model_state_dict, optimizer_state_dict, amp_state_dict = load_checkpoint(self.hparams.load_pthpath)
             if isinstance(self.model, nn.DataParallel):
                 self.model.module.load_state_dict(model_state_dict)
             else:
                 self.model.load_state_dict(model_state_dict)
             self.optimizer.load_state_dict(optimizer_state_dict)
+            amp.load_state_dict(amp_state_dict)
             self.previous_model_path = self.hparams.load_pthpath
             print("Loaded model from {}".format(self.hparams.load_pthpath))
 
@@ -179,7 +184,8 @@ class ContrastiveResponseSelection(object):
                     accu_rank_loss += rank_loss.item()
                     loss += rank_loss
 
-                loss.backward()
+                with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+                    scaled_loss.backward()
                 accu_loss += loss.item()
                 accu_cnt += 1
 
