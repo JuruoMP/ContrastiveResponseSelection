@@ -56,6 +56,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
                         print("%d examples has been loaded!" % len(self.input_examples))
                         if self.hparams.pca_visualization:
                             break
+                    if len(self.input_examples) >= 200000: break  # todo: for faster experiment
                 except EOFError:
                     break
         print(utterance_len_dict)
@@ -104,16 +105,15 @@ class ContrastiveResponseSelectionDataset(Dataset):
             negative_feature = self._example_to_feature(index, negative_example)
             features = {'original': (positive_feature, negative_feature)}
 
-            if self.hparams.do_contrastive:
-                pos_response_aug, neg_response_aug = positive_example.augments[0], negative_example.augments[0]
-                positive_example_aug, negative_example_aug = copy.deepcopy(positive_example), copy.deepcopy(negative_example)
-                positive_example_aug.response = pos_response_aug
-                positive_example_aug.response_len = len(pos_response_aug)
-                negative_example_aug.response = neg_response_aug
-                negative_example_aug.response_len = len(neg_response_aug)
-                positive_feature_aug = self._example_to_feature(index, positive_example_aug)
-                negative_feature_aug = self._example_to_feature(index, negative_example_aug)
-                features['augment'] = (positive_feature_aug, negative_feature_aug)
+            pos_response_aug, neg_response_aug = positive_example.augments[0], negative_example.augments[0]
+            positive_example_aug, negative_example_aug = copy.deepcopy(positive_example), copy.deepcopy(negative_example)
+            positive_example_aug.response = pos_response_aug
+            positive_example_aug.response_len = len(pos_response_aug)
+            negative_example_aug.response = neg_response_aug
+            negative_example_aug.response_len = len(neg_response_aug)
+            positive_feature_aug = self._example_to_feature(index, positive_example_aug)
+            negative_feature_aug = self._example_to_feature(index, negative_example_aug)
+            features['augment'] = (positive_feature_aug, negative_feature_aug)
 
             if self.split == 'train' and self.hparams.do_rank_loss:
                 retrieve_response = positive_example.retrieve
