@@ -119,6 +119,7 @@ BASE_PARAMS = defaultdict(
     rank_loss_ratio=1.0,
     projection_dim=256,
     max_utt_len=5,  # ubuntu : 5
+    bert_freeze_layer=6,
 
     save_dirpath='checkpoints/',  # /path/to/checkpoints
 
@@ -131,7 +132,7 @@ BASE_PARAMS = defaultdict(
 
 POST_PARAMS = BASE_PARAMS.copy()
 POST_PARAMS.update(
-    model_type="bert_post"
+    model_type="bert_post",
 )
 
 ELECTRA_POST_PARAMS = BASE_PARAMS.copy()

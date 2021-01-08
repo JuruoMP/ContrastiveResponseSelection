@@ -24,6 +24,11 @@ class BertCls(nn.Module):
             config=pretrained_config
         )
 
+        if hparams.bert_freeze_layer > 0:
+            freeze_layers = self._model.encoder.layer
+            for param in freeze_layers:
+                param.requires_grad = False
+
         num_new_tok = 0
         if self.hparams.model_type.startswith("bert_base") or self.hparams.model_type.startswith("electra_base"):
             if self.hparams.do_eot:
