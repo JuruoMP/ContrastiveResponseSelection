@@ -10,7 +10,7 @@ from train import ResponseSelection
 from post_train.post_training import PostTraining
 from contrastive.cl_train import ContrastiveResponseSelection
 
-from evaluation import Evaluation
+from contrastive.cl_evaluation import ContrastiveEvaluation
 from data.ubuntu_corpus_v1.ubuntu_data_utils import InputExamples
 
 PARAMS_MAP = {
@@ -46,7 +46,7 @@ TRAINING_TYPE_MAP = {
 }
 
 EVAL_TYPE_MAP = {
-    "fine_tuning": Evaluation,
+    "fine_tuning": ContrastiveEvaluation,
 }
 
 MULTI_TASK_TYPE_MAP = {
@@ -112,6 +112,13 @@ def evaluate_model(args, hparams):
     model.run_evaluate(args.evaluate)
 
 
+def dump_logits(args, hparams):
+    hparams.update({'evaluate_data_type': 'train'})
+    hparams = collections.namedtuple("HParams", sorted(hparams.keys()))(**hparams)
+    model = EVAL_TYPE_MAP[args.training_type](hparams)
+    model.dump_logits(args.dump_logits)
+
+
 if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser(description="Utterance Manipulation Strategy : Response Selection (PyTorch)")
     arg_parser.add_argument("--model", dest="model", type=str, default="bert_base", help="Model Name")
@@ -136,6 +143,8 @@ if __name__ == '__main__':
                             help="bert pretrained directory")  # bert-base-uncased, bert-post-uncased
     arg_parser.add_argument("--evaluate", dest="evaluate", type=str,
                             help="Evaluation Checkpoint", default="")
+    arg_parser.add_argument("--dump_logits", dest="dump_logits", type=str,
+                            help="Dump soft logits of training data", default="")
     arg_parser.add_argument("--training_type", dest="training_type", type=str, default="fine_tuning",
                             help="fine_tuning or post_training")
     arg_parser.add_argument("--multi_task_type", dest="multi_task_type", type=str, default="",
@@ -178,5 +187,7 @@ if __name__ == '__main__':
 
     if args.evaluate:
         evaluate_model(args, hparams)
+    elif args.dump_logits:
+        dump_logits(args, hparams)
     else:
         train_model(args, hparams)

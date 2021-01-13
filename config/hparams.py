@@ -109,6 +109,7 @@ BASE_PARAMS = defaultdict(
     use_batch_negative=False,
     do_augment_response_selection=False,
     do_rank_loss=False,
+    dynamic_loss=True,
 
     max_sequence_len=512,
     res_sel_loss_ratio=1.0,

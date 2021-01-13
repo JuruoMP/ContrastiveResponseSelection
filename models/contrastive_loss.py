@@ -99,3 +99,47 @@ class ConditionalNTXentLoss(nn.Module):
             loss += self.criterion(logits, labels)
 
         return loss / (2 * batch_size)
+
+
+class DynamicNTXentLoss(ConditionalNTXentLoss):
+    def criterion(self, logits, soft_labels, reduction='sum'):
+        # standard_ce_loss = torch.nn.functional.cross_entropy(logits, soft_labels, reduction='sum')
+        logits = torch.exp(logits)
+        ps = logits / logits.sum(dim=1, keepdim=True).expand(logits.size())
+        loss = -(torch.log(ps) * soft_labels)
+        if reduction == 'sum':
+            loss = loss.sum()
+        else:
+            loss = loss.mean()
+        return loss
+
+    def forward(self, zis, zjs, soft_labels=None):
+        device = zis.device
+        batch_size = zis.size(0)
+        zis_list = zis.split(2, dim=0)
+        zjs_list = zjs.split(2, dim=0)
+
+        loss = 0
+        for zis, zjs in zip(zis_list, zjs_list):
+            representations = torch.cat([zjs, zis], dim=0)
+
+            similarity_matrix = self.similarity_function(representations.unsqueeze(1), representations.unsqueeze(0))
+
+            # filter out the scores from the positive samples
+            l_pos = torch.diag(similarity_matrix, 2)
+            r_pos = torch.diag(similarity_matrix, -2)
+            positives = torch.cat([l_pos, r_pos]).view(2 * 2, 1)
+
+            mask_samples_from_same_repr = self._get_correlated_mask(2).to(device)
+            negatives = similarity_matrix[mask_samples_from_same_repr].view(2 * 2, -1)
+
+            logits = torch.cat((positives, negatives), dim=1)
+            logits /= self.temperature
+
+            if soft_labels is None:
+                soft_labels = torch.zeros(4, 3).to(device).long()
+                soft_labels[:, 0] = 1
+            example_loss = self.criterion(logits, soft_labels)
+            loss += example_loss
+
+        return loss / (2 * batch_size)

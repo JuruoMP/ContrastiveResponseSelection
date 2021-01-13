@@ -1,5 +1,6 @@
 import logging
 import math
+import pickle as pkl
 
 import numpy as np
 import torch
@@ -24,20 +25,42 @@ class ContrastiveEvaluation(object):
                        if self.hparams.gpu_ids[0] >= 0 else torch.device("cpu"))
         self.split = hparams.evaluate_data_type
         print("Evaluation Split :", self.split)
-        do_valid, do_test = False, False
+        do_valid, do_test, do_train = False, False, False
 
         if self.split == "dev":
             do_valid = True
-        else:
+        elif self.split == 'test':
             do_test = True
-        self._build_dataloader(do_valid=do_valid, do_test=do_test)
-        self._dataloader = self.valid_dataloader if self.split == 'dev' else self.test_dataloader
+        elif self.split == 'train':
+            do_train = True
+        self._build_dataloader(do_valid=do_valid, do_test=do_test, do_train=do_train)
+        if self.split == 'dev':
+            self._dataloader = self.valid_dataloader
+        elif self.split == 'test':
+            self._dataloader = self.test_dataloader
+        elif self.split == 'train':
+            self._dataloader = self.train_dataloader
+        else:
+            raise ValueError('Split error while loading data')
 
         if model is None:
             print("No pre-defined model!")
             self._build_model()
 
-    def _build_dataloader(self, do_valid=False, do_test=False):
+    def _build_dataloader(self, do_valid=False, do_test=False, do_train=False):
+
+        if do_train:
+            self.train_dataset = ContrastiveResponseSelectionDataset(
+                self.hparams,
+                split="train",
+            )
+            self.train_dataloader = DataLoader(
+                self.train_dataset,
+                batch_size=self.hparams.eval_batch_size,
+                num_workers=self.hparams.cpu_workers,
+                drop_last=False,
+                shuffle=False,
+            )
 
         if do_valid:
             self.valid_dataset = ContrastiveResponseSelectionDataset(
@@ -86,6 +109,7 @@ class ContrastiveEvaluation(object):
         total_examples, total_correct = 0, 0
 
         self.model.eval()
+        ret_logits = []
 
         with torch.no_grad():
             for batch_idx, batch in enumerate(tqdm(self._dataloader)):
@@ -96,6 +120,7 @@ class ContrastiveEvaluation(object):
 
                 logits, loss = self.model(buffer_batch_dict)
                 pred = torch.sigmoid(logits).to("cpu").tolist()
+                ret_logits += pred
 
                 rank_by_pred, pos_index, stack_scores = \
                     calculate_candidates_ranking(np.array(pred),
@@ -146,3 +171,10 @@ class ContrastiveEvaluation(object):
             self._logger.info("MRR: %.4f" % avg_mrr)
             self._logger.info("P@1: %.4f" % avg_prec_at_one)
             self._logger.info("MAP: %.4f" % avg_map)
+
+        return ret_logits
+
+    def dump_logits(self, best_model_path):
+        evaluation = ContrastiveEvaluation(self.hparams, model=self.model)
+        ret_logits = evaluation.run_evaluate(best_model_path, self.train_dataloader)
+        pkl.dump(ret_logits, open(f'cache/{self.hparams.task_name}_soft_logits.pkl', 'wb'))
