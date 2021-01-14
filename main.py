@@ -10,6 +10,7 @@ from train import ResponseSelection
 from post_train.post_training import PostTraining
 from contrastive.cl_train import ContrastiveResponseSelection
 
+from evaluation import Evaluation
 from contrastive.cl_evaluation import ContrastiveEvaluation
 from data.ubuntu_corpus_v1.ubuntu_data_utils import InputExamples
 
@@ -46,7 +47,8 @@ TRAINING_TYPE_MAP = {
 }
 
 EVAL_TYPE_MAP = {
-    "fine_tuning": ContrastiveEvaluation,
+    "fine_tuning": Evaluation,
+    "contrastive": ContrastiveEvaluation
 }
 
 MULTI_TASK_TYPE_MAP = {
@@ -102,7 +104,7 @@ def train_model(args, hparams):
 
     hparams = collections.namedtuple("HParams", sorted(hparams.keys()))(**hparams)
     model = TRAINING_TYPE_MAP[args.training_type](hparams)
-    model.train()
+    return model.train()
 
 
 def evaluate_model(args, hparams):
@@ -144,7 +146,9 @@ if __name__ == '__main__':
     arg_parser.add_argument("--evaluate", dest="evaluate", type=str,
                             help="Evaluation Checkpoint", default="")
     arg_parser.add_argument("--dump_logits", dest="dump_logits", type=str,
-                            help="Dump soft logits of training data", default="")
+                            help="Path to dump soft logits of training data", default="")
+    arg_parser.add_argument("--logits_path", dest="logits_path", type=str, default="",
+                            help="file path of soft logits")
     arg_parser.add_argument("--training_type", dest="training_type", type=str, default="fine_tuning",
                             help="fine_tuning or post_training")
     arg_parser.add_argument("--multi_task_type", dest="multi_task_type", type=str, default="",
@@ -171,6 +175,7 @@ if __name__ == '__main__':
     hparams["task_type"] = args.task_type
     hparams["training_type"] = args.training_type
     hparams["use_batch_negative"] = args.use_batch_negative
+    hparams["logits_path"] = args.logits_path
 
     if len(args.electra_gen_config) > 0:
         hparams["electra_gen_config"] = args.electra_gen_config
@@ -188,6 +193,9 @@ if __name__ == '__main__':
     if args.evaluate:
         evaluate_model(args, hparams)
     elif args.dump_logits:
+        hparams.update({'dump_logits': args.dump_logits})
         dump_logits(args, hparams)
     else:
-        train_model(args, hparams)
+        recall_list, model_path = train_model(args, hparams)
+        hparams.update({'dump_logits': model_path})
+        dump_logits(args, hparams)

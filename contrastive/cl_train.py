@@ -136,16 +136,19 @@ class ContrastiveResponseSelection(object):
         accu_cl_loss, accu_rank_loss = 0, 0
         accu_cnt = 0
 
+        best_recall_list, best_model_path = [0], ''
+
         for epoch in range(self.start_epoch, self.hparams.num_epochs + 1):
             self.model.train()
             tqdm_batch_iterator = tqdm(self.train_dataloader)
             accu_batch = 0
             for batch_idx, batch in enumerate(tqdm_batch_iterator):
 
-                # buffer_batch = batch.copy()
-                # for task_key in batch:
-                #     for key in buffer_batch[task_key]:
-                #         buffer_batch[task_key][key] = buffer_batch[task_key][key].to(self.device)
+                buffer_batch = batch.copy()
+                for group in buffer_batch:
+                    for task_key in buffer_batch[group]:
+                        for key in buffer_batch[group][task_key]:
+                            buffer_batch[group][task_key][key] = buffer_batch[group][task_key][key].to(self.device)
 
                 buffer_batch = batch
                 with amp.autocast():
@@ -237,5 +240,11 @@ class ContrastiveResponseSelection(object):
 
             torch.cuda.empty_cache()
             self._logger.info("Evaluation after %d epoch" % epoch)
-            evaluation.run_evaluate(self.previous_model_path)
+            recall_list = evaluation.run_evaluate(self.previous_model_path)
+            if recall_list[0] > best_recall_list[0]:
+                best_recall_list = recall_list
+                best_model_path = self.previous_model_path
             torch.cuda.empty_cache()
+
+        print(f'Best recalls: {best_recall_list}, model path: {best_model_path}')
+        return best_recall_list, best_model_path

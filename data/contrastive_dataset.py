@@ -31,13 +31,11 @@ class ContrastiveResponseSelectionDataset(Dataset):
         # read pkls -> Input Examples
         self.input_examples = []
         utterance_len_dict = dict()
-
         if self.split == 'train':
             data_path = os.path.join(hparams.data_dir, "%s_%s_aug_retrieve.pkl" % (hparams.task_name, split))
         else:
             data_path = os.path.join(hparams.data_dir, "%s_%s_aug.pkl" % (hparams.task_name, split))
         with open(data_path, "rb") as pkl_handle:
-
             while True:
                 try:
                     example = pickle.load(pkl_handle)
@@ -58,6 +56,13 @@ class ContrastiveResponseSelectionDataset(Dataset):
                             break
                 except EOFError:
                     break
+
+        # load soft logits
+        if split == 'train' and self.hparams.logits_path:
+            all_soft_logits = pickle.load(open(self.hparams.logits_path, 'rb'))
+            for i in range(len(self.input_examples)):
+                self.input_examples[i].soft_logits = all_soft_logits[i]
+
         print(utterance_len_dict)
         integrated_input_examples = []
         if split == 'train':
@@ -100,12 +105,18 @@ class ContrastiveResponseSelectionDataset(Dataset):
         """
         if self.split == 'train':
             positive_example, negative_example = self.input_examples[index]
+            positive_soft_logits = getattr(positive_example, 'soft_logits', (1, 1))
+            negative_soft_logits = getattr(negative_example, 'soft_logits', (0, 0))
+            positive_example.soft_logits = positive_soft_logits[0]
+            negative_example.soft_logits = negative_soft_logits[0]
             positive_feature = self._example_to_feature(index, positive_example)
             negative_feature = self._example_to_feature(index, negative_example)
             features = {'original': (positive_feature, negative_feature)}
 
             pos_response_aug, neg_response_aug = positive_example.augments[0], negative_example.augments[0]
             positive_example_aug, negative_example_aug = copy.deepcopy(positive_example), copy.deepcopy(negative_example)
+            positive_example_aug.soft_logits = positive_soft_logits[1]
+            negative_example_aug.soft_logits = negative_soft_logits[1]
             positive_example_aug.response = pos_response_aug
             positive_example_aug.response_len = len(pos_response_aug)
             negative_example_aug.response = neg_response_aug
@@ -136,6 +147,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
         current_feature["res_sel"]["attention_mask"] = torch.tensor(attention_mask).long()
         current_feature["res_sel"]["eot_pos"] = torch.tensor(eot_pos).long()
         current_feature["res_sel"]["label"] = torch.tensor(example.label).float()
+        current_feature["res_sel"]["soft_logits"] = torch.tensor(example.soft_logits)
 
         # when the response is the ground truth, append it to utterances.
         if int(example.label) == 1:

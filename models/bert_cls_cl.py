@@ -70,6 +70,7 @@ class BertCls(nn.Module):
         else:
             self._nt_xent_criterion = ConditionalNTXentLoss(temperature=0.5, use_cosine_similarity=True)
         self.hinge_lambda = 0.4
+        self.return_augment = False
 
     @amp.autocast()
     def forward(self, batch_data):
@@ -95,7 +96,7 @@ class BertCls(nn.Module):
         if self.hparams.do_sent_search and (self.training or self.hparams.pca_visualization):
             srch_loss = self._bert_search(batch["srch"], batch["res_sel"]["label"])
 
-        if self.hparams.do_contrastive and self.training:
+        if self.hparams.do_contrastive and (self.training or self.hparams.dump_logits):
             batch_aug = batch_data['augment']
             outputs_aug = self._model(
                 batch_aug["res_sel"]["anno_sent"],
@@ -106,7 +107,9 @@ class BertCls(nn.Module):
             cls_logits_aug = bert_outputs_aug[:, 0, :]
             z = self._projection(cls_logits)
             z_aug = self._projection(cls_logits_aug)
-            contrastive_loss = self._nt_xent_criterion(z, z_aug)
+            soft_logits, soft_logits_aug = batch['res_sel']['soft_logits'], batch_aug['res_sel']['soft_logits']
+            soft_labels = torch.stack((soft_logits, soft_logits_aug), dim=1).view(-1, 4)
+            contrastive_loss = self._nt_xent_criterion(z, z_aug, soft_labels=soft_labels)
 
             if self.hparams.do_augment_response_selection:
                 logits_aug = self._classification(cls_logits_aug)  # bs, 1
@@ -127,4 +130,7 @@ class BertCls(nn.Module):
             rank_loss = torch.clamp(self.hinge_lambda + logits_retrieve - positive_logits, min=0).mean() + \
                 torch.clamp(self.hinge_lambda + negative_logits - logits_retrieve, min=0).mean()
 
-        return logits, (res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss, rank_loss)
+        if not self.return_augment:
+            return logits, (res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss, rank_loss)
+        else:
+            return (logits, logits_aug), (res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss, rank_loss)

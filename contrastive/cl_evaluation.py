@@ -60,6 +60,7 @@ class ContrastiveEvaluation(object):
                 num_workers=self.hparams.cpu_workers,
                 drop_last=False,
                 shuffle=False,
+                collate_fn=ContrastiveResponseSelectionDataset.collate_fn,
             )
 
         if do_valid:
@@ -72,6 +73,7 @@ class ContrastiveEvaluation(object):
                 batch_size=self.hparams.eval_batch_size,
                 num_workers=self.hparams.cpu_workers,
                 drop_last=False,
+                collate_fn=ContrastiveResponseSelectionDataset.collate_fn,
             )
 
         if do_test:
@@ -109,7 +111,6 @@ class ContrastiveEvaluation(object):
         total_examples, total_correct = 0, 0
 
         self.model.eval()
-        ret_logits = []
 
         with torch.no_grad():
             for batch_idx, batch in enumerate(tqdm(self._dataloader)):
@@ -120,7 +121,6 @@ class ContrastiveEvaluation(object):
 
                 logits, loss = self.model(buffer_batch_dict)
                 pred = torch.sigmoid(logits).to("cpu").tolist()
-                ret_logits += pred
 
                 rank_by_pred, pos_index, stack_scores = \
                     calculate_candidates_ranking(np.array(pred),
@@ -172,9 +172,33 @@ class ContrastiveEvaluation(object):
             self._logger.info("P@1: %.4f" % avg_prec_at_one)
             self._logger.info("MAP: %.4f" % avg_map)
 
-        return ret_logits
+        return [total_correct[i] / total_examples for i in range(len(k_list))]
 
     def dump_logits(self, best_model_path):
-        evaluation = ContrastiveEvaluation(self.hparams, model=self.model)
-        ret_logits = evaluation.run_evaluate(best_model_path, self.train_dataloader)
+        model_state_dict, optimizer_state_dict = load_checkpoint(best_model_path)
+        print(f'Load model from {best_model_path}')
+        if isinstance(self.model, nn.DataParallel):
+            self.model.module.load_state_dict(model_state_dict)
+        else:
+            self.model.load_state_dict(model_state_dict)
+
+        self.model.eval()
+        self.model.return_augment = True
+        ret_logits = []
+
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(tqdm(self._dataloader)):
+                buffer_batch = batch.copy()
+                for group in buffer_batch:
+                    group_data = buffer_batch[group]
+                    for task_key in group_data:
+                        for key in group_data[task_key]:
+                            buffer_batch[group][task_key][key] = buffer_batch[group][task_key][key].to(self.device)
+
+                (logits, aug_logits), loss = self.model(buffer_batch)
+                pred = torch.sigmoid(logits).to("cpu").tolist()
+                aug_pred = torch.sigmoid(aug_logits).to("cpu").tolist()
+                ret_logits += list(zip(pred, aug_pred))
+
         pkl.dump(ret_logits, open(f'cache/{self.hparams.task_name}_soft_logits.pkl', 'wb'))
+
