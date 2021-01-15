@@ -164,7 +164,7 @@ if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_ids
 
     hparams = PARAMS_MAP[args.model]
-    hparams["gpu_ids"] = list(range(len(args.gpu_ids.split(","))))[::-1]
+    hparams["gpu_ids"] = list(range(len(args.gpu_ids.split(","))))
     hparams["root_dir"] = args.root_dir
     hparams["data_dir"] = args.data_dir
     hparams["bert_pretrained_dir"] = args.bert_pretrained_dir
