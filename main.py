@@ -118,7 +118,7 @@ def dump_logits(args, hparams):
     hparams.update({'evaluate_data_type': 'train'})
     hparams = collections.namedtuple("HParams", sorted(hparams.keys()))(**hparams)
     model = EVAL_TYPE_MAP[args.training_type](hparams)
-    model.dump_logits(args.dump_logits)
+    model.dump_logits(hparams['dump_logits'])
 
 
 if __name__ == '__main__':
@@ -175,6 +175,7 @@ if __name__ == '__main__':
     hparams["task_type"] = args.task_type
     hparams["training_type"] = args.training_type
     hparams["use_batch_negative"] = args.use_batch_negative
+    hparams["dump_logits"] = args.dump_logits
     hparams["logits_path"] = args.logits_path
 
     if len(args.electra_gen_config) > 0:
@@ -193,9 +194,8 @@ if __name__ == '__main__':
     if args.evaluate:
         evaluate_model(args, hparams)
     elif args.dump_logits:
-        hparams.update({'dump_logits': args.dump_logits})
         dump_logits(args, hparams)
     else:
         recall_list, model_path = train_model(args, hparams)
-        hparams.update({'dump_logits': model_path})
-        dump_logits(args, hparams)
+        # hparams.update({'dump_logits': model_path})
+        # dump_logits(args, hparams)

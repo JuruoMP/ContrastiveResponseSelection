@@ -1,6 +1,7 @@
 import logging
 import math
 import pickle as pkl
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -200,5 +201,5 @@ class ContrastiveEvaluation(object):
                 aug_pred = torch.sigmoid(aug_logits).to("cpu").tolist()
                 ret_logits += list(zip(pred, aug_pred))
 
-        pkl.dump(ret_logits, open(f'cache/{self.hparams.task_name}_soft_logits.pkl', 'wb'))
+        pkl.dump(ret_logits, open(f'cache/{self.hparams.task_name}_soft_logits_{datetime.now().strftime("%m%d%H%M%S")}.pkl', 'wb'))
 
