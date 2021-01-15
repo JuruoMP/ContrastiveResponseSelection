@@ -149,6 +149,7 @@ class DynamicNTXentLoss(ConditionalNTXentLoss):
                     torch.cat((distance_matrix[3, 2:3], distance_matrix[3, 0:2]), dim=0)
                 ], dim=0)
                 target_distribution = 1 - distance_matrix_logits
+                target_distribution = target_distribution / target_distribution.sum(dim=1, keepdim=True)
             example_loss = self.criterion(logits, target_distribution)
             # standard_ce_loss = torch.nn.functional.cross_entropy(logits, torch.LongTensor([0, 0, 0, 0]).to(logits.device), reduction='sum')
             loss += example_loss
