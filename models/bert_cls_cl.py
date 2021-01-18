@@ -107,14 +107,18 @@ class BertCls(nn.Module):
             cls_logits_aug = bert_outputs_aug[:, 0, :]
             z = self._projection(cls_logits)
             z_aug = self._projection(cls_logits_aug)
-            soft_logits, soft_logits_aug = batch['res_sel']['soft_logits'], batch_aug['res_sel']['soft_logits']
-            soft_labels = torch.stack((soft_logits, soft_logits_aug), dim=1).view(-1, 4)
-            contrastive_loss = self._nt_xent_criterion(z, z_aug, soft_labels=soft_labels)
 
+            logits_aug = self._classification(cls_logits_aug)  # bs, 1
+            logits_aug = logits_aug.squeeze(-1)
             if self.hparams.do_augment_response_selection:
-                logits_aug = self._classification(cls_logits_aug)  # bs, 1
-                logits_aug = logits_aug.squeeze(-1)
                 res_sel_loss = (res_sel_loss + self._criterion(logits_aug, batch_aug["res_sel"]["label"])) / 2
+
+            if self.hparams.dynamic_logits:
+                soft_logits, soft_logits_aug = logits.detach(), logits_aug.detach()
+            else:
+                soft_logits, soft_logits_aug = batch['res_sel']['soft_logits'], batch_aug['res_sel']['soft_logits']  # n_example, n_example
+            soft_labels = torch.stack((soft_logits, soft_logits_aug), dim=1).view(-1, 4)  # n_query * 4
+            contrastive_loss = self._nt_xent_criterion(z, z_aug, soft_labels=soft_labels)
 
         if self.hparams.do_rank_loss and self.training:
             batch_retrieve = batch_data['retrieve']

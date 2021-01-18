@@ -110,6 +110,7 @@ BASE_PARAMS = defaultdict(
     do_augment_response_selection=False,
     do_rank_loss=False,
     dynamic_loss=True,
+    dynamic_logits=True,
 
     max_sequence_len=512,
     res_sel_loss_ratio=1.0,
@@ -128,7 +129,7 @@ BASE_PARAMS = defaultdict(
     cpu_workers=4,
     tensorboard_step=100,
     evaluate_print_step=1000,
-    random_seed=random.sample(range(1000, 10000), 1)[0],  # 3143
+    random_seed=1837  # random.sample(range(1000, 10000), 1)[0],  # 3143
 )
 
 POST_PARAMS = BASE_PARAMS.copy()
