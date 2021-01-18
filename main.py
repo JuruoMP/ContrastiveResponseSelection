@@ -5,6 +5,9 @@ import logging
 import json
 from datetime import datetime
 
+import numpy as np
+import torch
+
 from config.hparams import *
 from train import ResponseSelection
 from post_train.post_training import PostTraining
@@ -59,6 +62,21 @@ MULTI_TASK_TYPE_MAP = {
     "aug": AUGMENT_PARAMS,
     "rank": RANK_PARAMS,
 }
+
+
+def set_random_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    if seed == 0:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 
 def init_logger(path: str, hparams):
@@ -177,6 +195,8 @@ if __name__ == '__main__':
     hparams["use_batch_negative"] = args.use_batch_negative
     hparams["dump_logits"] = args.dump_logits
     hparams["logits_path"] = args.logits_path
+
+    set_random_seed(hparams['random_seed'])
 
     if len(args.electra_gen_config) > 0:
         hparams["electra_gen_config"] = args.electra_gen_config

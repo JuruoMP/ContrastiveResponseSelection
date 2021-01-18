@@ -113,9 +113,10 @@ class ContrastiveResponseSelectionDataset(Dataset):
             negative_feature = self._example_to_feature(index, negative_example)
             features = {'original': (positive_feature, negative_feature)}
 
-            pos_response_aug, neg_response_aug = positive_example.augments[0], negative_example.augments[0]
+            pos_aug_idx, neg_aug_idx = random.randint(0, len(positive_example.augments) - 1), random.randint(0, len(negative_example.augments) - 1)
+            pos_response_aug, neg_response_aug = positive_example.augments[pos_aug_idx], negative_example.augments[neg_aug_idx]
             positive_example_aug, negative_example_aug = copy.deepcopy(positive_example), copy.deepcopy(negative_example)
-            positive_example_aug.soft_logits = positive_soft_logits[1]
+            positive_example_aug.soft_logits = positive_soft_logits[1]  # warning: this value only support 1 augmentation
             negative_example_aug.soft_logits = negative_soft_logits[1]
             positive_example_aug.response = pos_response_aug
             positive_example_aug.response_len = len(pos_response_aug)
