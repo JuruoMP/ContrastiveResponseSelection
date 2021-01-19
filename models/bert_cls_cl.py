@@ -65,10 +65,7 @@ class BertCls(nn.Module):
         self._criterion = nn.BCEWithLogitsLoss()
         if self.hparams.use_batch_negative:
             self._nt_xent_criterion = NTXentLoss(temperature=0.5, use_cosine_similarity=True)
-        elif self.hparams.dynamic_loss:
-            self._nt_xent_criterion = DynamicNTXentLoss(temperature=0.5, use_cosine_similarity=True)
-        else:
-            self._nt_xent_criterion = ConditionalNTXentLoss(temperature=0.5, use_cosine_similarity=True)
+        self._nt_xent_criterion = DynamicNTXentLoss(temperature=0.5, use_cosine_similarity=True)
         self.hinge_lambda = 0.4
         self.return_augment = False
 
