@@ -138,7 +138,7 @@ class DynamicNTXentLoss(ConditionalNTXentLoss):
             logits /= self.temperature
 
             if soft_logits is None:
-                target_distribution = torch.zeros(4, 3).to(device).long()
+                target_distribution = torch.zeros(4, 3).to(device).float()
                 target_distribution[:, 0] = 1
             else:
                 distance_matrix = torch.abs(soft_logits.unsqueeze(1) - soft_logits.unsqueeze(0))
