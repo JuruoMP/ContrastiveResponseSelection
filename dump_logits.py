@@ -1,21 +1,26 @@
-import os
 import argparse
 import collections
-import logging
-import json
-from datetime import datetime
+import os
+import pickle as pkl
 
-import numpy as np
-import torch
+from tqdm import trange
 
 from config.hparams import *
-from train import ResponseSelection
-from post_train.post_training import PostTraining
-from contrastive.cl_train import ContrastiveResponseSelection
-
 from evaluation import Evaluation
 from contrastive.cl_evaluation import ContrastiveEvaluation
-from data.ubuntu_corpus_v1.ubuntu_data_utils import InputExamples
+from post_train.post_training import PostTraining
+from train import ResponseSelection
+
+class InputExamples(object):
+    def __init__(self, utterances, response, label, seq_lengths, augments=None, retrieve=None):
+        self.utterances = utterances
+        self.response = response
+        self.label = label
+
+        self.dialog_len = seq_lengths[0]
+        self.response_len = seq_lengths[1]
+        self.augments = augments
+        self.retrieve = retrieve
 
 PARAMS_MAP = {
     # Pre-trained Models
@@ -45,8 +50,7 @@ PRETRAINED_MODEL_MAP = {
 
 TRAINING_TYPE_MAP = {
     "fine_tuning": ResponseSelection,
-    "post_training": PostTraining,
-    "contrastive": ContrastiveResponseSelection
+    "post_training": PostTraining
 }
 
 EVAL_TYPE_MAP = {
@@ -57,79 +61,16 @@ EVAL_TYPE_MAP = {
 MULTI_TASK_TYPE_MAP = {
     "ins": INSERTION_PARAMS,
     "del": DELETION_PARAMS,
-    "srch": SEARCH_PARAMS,
-    "contras": CONTRASTIVE_PARAMS,
-    "aug": AUGMENT_PARAMS,
-    "rank": RANK_PARAMS,
+    "srch": SEARCH_PARAMS
 }
 
 
-def set_random_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-
-    if seed == 0:
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-
-
-def init_logger(path: str, hparams):
-    if not os.path.exists(path):
-        os.makedirs(path)
-    hparams = dict(hparams)
-    del hparams['pretrained_config']
-    del hparams['pretrained_model']
-    json.dump(hparams, open(os.path.join(path, 'config.txt'), 'w', encoding='utf-8'), indent=2)
-
-    logger = logging.getLogger()
-    logger.handlers = []
-    logger.setLevel(logging.DEBUG)
-    debug_fh = logging.FileHandler(os.path.join(path, "debug.log"))
-    debug_fh.setLevel(logging.DEBUG)
-
-    info_fh = logging.FileHandler(os.path.join(path, "info.log"))
-    info_fh.setLevel(logging.INFO)
-
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-
-    info_formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(message)s')
-    debug_formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(message)s | %(lineno)d:%(funcName)s')
-
-    ch.setFormatter(info_formatter)
-    info_fh.setFormatter(info_formatter)
-    debug_fh.setFormatter(debug_formatter)
-
-    logger.addHandler(ch)
-    logger.addHandler(debug_fh)
-    logger.addHandler(info_fh)
-
-    return logger
-
-
-def train_model(args, hparams):
-    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-    root_dir = os.path.join(hparams["root_dir"], args.model, args.task_name, "%s/" % timestamp)
-    logger = init_logger(root_dir, hparams)
-    logger.info("Hyper-parameters: %s" % str(hparams))
-    hparams["root_dir"] = root_dir
-
+def evaluate(hparams, context_list, response_list):
+    test_data = (context_list, response_list)
     hparams = collections.namedtuple("HParams", sorted(hparams.keys()))(**hparams)
-    model = TRAINING_TYPE_MAP[args.training_type](hparams)
-    return model.train()
-
-
-def evaluate_model(args, hparams):
-    hparams = collections.namedtuple("HParams", sorted(hparams.keys()))(**hparams)
-
     model = EVAL_TYPE_MAP[args.training_type](hparams)
-    model.run_evaluate(args.evaluate)
+    logits = model.run_evaluate_with_data(args.evaluate, test_data)
+    return logits
 
 
 if __name__ == '__main__':
@@ -141,9 +82,9 @@ if __name__ == '__main__':
                             help="response selection | sentence insertion")
     # bert-base-uncased, bert-post-uncased
     arg_parser.add_argument("--root_dir", dest="root_dir", type=str,
-                            default="./",
+                            default="/data/taesunwhang/response_selection/",
                             help="model train logs, checkpoints")
-    arg_parser.add_argument("--data_dir", dest="data_dir", type=str, required=True,
+    arg_parser.add_argument("--data_dir", dest="data_dir", type=str, default='data/ubuntu_corpus_v1',
                             help="training pkl path | h5py files")  # ubuntu_train.pkl, ubuntu_valid_pkl, ubuntu_test.pkl
     arg_parser.add_argument("--bert_pretrained_dir", dest="bert_pretrained_dir", type=str,
                             default="./resources",
@@ -156,19 +97,25 @@ if __name__ == '__main__':
                             help="bert pretrained directory")  # bert-base-uncased, bert-post-uncased
     arg_parser.add_argument("--evaluate", dest="evaluate", type=str,
                             help="Evaluation Checkpoint", default="")
-    arg_parser.add_argument("--training_type", dest="training_type", type=str, default="fine_tuning",
+    arg_parser.add_argument("--logits_path", dest="logits_path", type=str, default="",
+                            help="file path of soft logits")
+    arg_parser.add_argument("--training_type", dest="training_type", type=str, default="contrastive",
                             help="fine_tuning or post_training")
     arg_parser.add_argument("--multi_task_type", dest="multi_task_type", type=str, default="",
-                            help="ins,del,srch,contras,aug,rank")
+                            help="ins,del,srch")
     arg_parser.add_argument("--gpu_ids", dest="gpu_ids", type=str,
-                            help="gpu_ids", default="0")
+                            help="gpu_ids", default="0, 1")
     arg_parser.add_argument("--electra_gen_config", dest="electra_gen_config", type=str,
                             help="electra_gen_config", default="")  # electra-base-gen, electra-base-chinese-gen
-    arg_parser.add_argument("--use_batch_negative", dest="use_batch_negative", type=bool, default=False,
-                            help="Use all examples in the batch as negative for contrastive learning")
+    arg_parser.add_argument("--input", dest="input_path", type=str,
+                            help="Input pkl path", default="")
+    arg_parser.add_argument("--output", dest="output_path", type=str,
+                            help="Output pkl path", default="")
 
     args = arg_parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_ids
+
+    n_augment = 2
 
     hparams = PARAMS_MAP[args.model]
     hparams["gpu_ids"] = list(range(len(args.gpu_ids.split(","))))
@@ -181,9 +128,7 @@ if __name__ == '__main__':
     hparams["task_name"] = args.task_name
     hparams["task_type"] = args.task_type
     hparams["training_type"] = args.training_type
-    hparams["use_batch_negative"] = args.use_batch_negative
-
-    set_random_seed(hparams['random_seed'])
+    hparams["logits_path"] = args.logits_path
 
     if len(args.electra_gen_config) > 0:
         hparams["electra_gen_config"] = args.electra_gen_config
@@ -197,8 +142,30 @@ if __name__ == '__main__':
 
     hparams.update(DATASET_MAP[args.task_name])
     hparams.update(PRETRAINED_MODEL_MAP[args.bert_pretrained.split("-")[0]])
+    hparams.update({'evaluate_data_type': 'train'})
 
-    if args.evaluate:
-        evaluate_model(args, hparams)
-    else:
-        recall_list, model_path = train_model(args, hparams)
+    context_list, response_list = [], []
+    all_examples = []
+    with open(args.input_path, 'rb') as pkl_handler:
+        while True:
+            try:
+                example = pkl.load(pkl_handler)
+                context_list.append(example.utterances)
+                response_list.append(example.response)
+                assert len(example.augments) == n_augment
+                for i in range(n_augment):
+                    context_list.append(example.utterances)
+                    response_list.append(example.augments[i])
+                all_examples.append(example)
+                if len(all_examples) % 100000 == 0:
+                    print(f'Load {len(all_examples)} examples')
+            except EOFError:
+                break
+    logits = evaluate(hparams, context_list, response_list)
+    with open(args.output_path, 'wb') as pkl_handler:
+        for i in trange(len(all_examples)):
+            example = all_examples[i]
+            example.soft_logits = logits[3 * i]
+            example.aug_soft_logits = (logits[3 * i + 1], logits[3 * i + 2])
+            pkl.dump(example, pkl_handler)
+    print('Dump soft logits successfully')

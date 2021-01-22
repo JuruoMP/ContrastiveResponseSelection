@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 from torch.utils.data.dataloader import default_collate
 
 from models.bert import tokenization_bert
-
+from data.ubuntu_corpus_v1.ubuntu_data_utils import InputExamples
 
 
 class ContrastiveResponseSelectionDataset(Dataset):
@@ -22,6 +22,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
             self,
             hparams,
             split: str = "",
+            data=None
     ):
         super().__init__()
 
@@ -31,47 +32,57 @@ class ContrastiveResponseSelectionDataset(Dataset):
         # read pkls -> Input Examples
         self.input_examples = []
         utterance_len_dict = dict()
-        if self.split == 'train':
-            data_path = os.path.join(hparams.data_dir, "%s_%s_aug_retrieve.pkl" % (hparams.task_name, split))
-        else:
+        if data is None:
             data_path = os.path.join(hparams.data_dir, "%s_%s_aug.pkl" % (hparams.task_name, split))
-        with open(data_path, "rb") as pkl_handle:
-            while True:
-                try:
-                    example = pickle.load(pkl_handle)
-                    num_examples = len(example.utterances) if len(example.utterances) < 10 else 10
+            with open(data_path, "rb") as pkl_handle:
+                while True:
                     try:
-                        utterance_len_dict[str(num_examples)] += 1
-                    except KeyError:
-                        utterance_len_dict[str(num_examples)] = 1
+                        example = pickle.load(pkl_handle)
+                        num_examples = len(example.utterances) if len(example.utterances) < 10 else 10
+                        try:
+                            utterance_len_dict[str(num_examples)] += 1
+                        except KeyError:
+                            utterance_len_dict[str(num_examples)] = 1
 
-                    if self.hparams.do_shuffle_ressel:
-                        random.shuffle(example.utterances)
+                        if self.hparams.do_shuffle_ressel:
+                            random.shuffle(example.utterances)
 
-                    self.input_examples.append(example)
+                        self.input_examples.append(example)
 
-                    if len(self.input_examples) % 100000 == 0:
-                        print("%d examples has been loaded!" % len(self.input_examples))
-                        if self.hparams.pca_visualization:
-                            break
-                except EOFError:
-                    break
+                        if len(self.input_examples) % 100000 == 0:
+                            print("%d examples has been loaded!" % len(self.input_examples))
+                            if self.hparams.pca_visualization:
+                                break
+                        if len(self.input_examples) >= 100000: break
+                    except EOFError:
+                        break
+        else:
+            bert_pretrained_dir = os.path.join(self.hparams.bert_pretrained_dir, self.hparams.bert_pretrained)
+            self._bert_tokenizer = tokenization_bert.BertTokenizer(
+                vocab_file=os.path.join(bert_pretrained_dir, "%s-vocab.txt" % self.hparams.bert_pretrained))
+            contexts, responses = data
+            for context, response in zip(contexts, responses):
+                dialog_len = [len(x) for x in context]
+                input_example = InputExamples(
+                    utterances=context, response=response, label=1,
+                    seq_lengths=(dialog_len, len(response)))
+                self.input_examples.append(input_example)
 
-        # load soft logits
-        if split == 'train' and self.hparams.logits_path:
-            all_soft_logits = pickle.load(open(self.hparams.logits_path, 'rb'))
-            for i in range(len(self.input_examples)):
-                self.input_examples[i].soft_logits = all_soft_logits[i]
+            random.seed(self.hparams.random_seed)
+            self.num_input_examples = len(self.input_examples)
+            print("total %s examples" % split, self.num_input_examples)
 
         print(utterance_len_dict)
         integrated_input_examples = []
         if split == 'train':
             for i in range(0, len(self.input_examples), 2):  # training set 1:1
                 integrated_input_examples.append((self.input_examples[i], self.input_examples[i + 1]))
-        else:
+        elif split in ('dev', 'test'):
             for i in range(0, len(self.input_examples), 10):  # dev/test set 1:10
                 batch_data = tuple([self.input_examples[j] for j in range(i, i + 10)])
                 integrated_input_examples.append(batch_data)
+        else:  # dump logits
+            integrated_input_examples = [(x,) for x in self.input_examples]
         self.input_examples = integrated_input_examples
         random.seed(self.hparams.random_seed)
         self.num_input_examples = len(self.input_examples)
@@ -105,10 +116,6 @@ class ContrastiveResponseSelectionDataset(Dataset):
         """
         if self.split == 'train':
             positive_example, negative_example = self.input_examples[index]
-            positive_soft_logits = getattr(positive_example, 'soft_logits', (1, 1))
-            negative_soft_logits = getattr(negative_example, 'soft_logits', (0, 0))
-            positive_example.soft_logits = 1  # positive_soft_logits[0]
-            negative_example.soft_logits = 0  # negative_soft_logits[0]
             positive_feature = self._example_to_feature(index, positive_example)
             negative_feature = self._example_to_feature(index, negative_example)
             features = {'original': (positive_feature, negative_feature)}
@@ -116,12 +123,13 @@ class ContrastiveResponseSelectionDataset(Dataset):
             pos_aug_idx, neg_aug_idx = random.randint(0, len(positive_example.augments) - 1), random.randint(0, len(negative_example.augments) - 1)
             pos_response_aug, neg_response_aug = positive_example.augments[pos_aug_idx], negative_example.augments[neg_aug_idx]
             positive_example_aug, negative_example_aug = copy.deepcopy(positive_example), copy.deepcopy(negative_example)
-            positive_example_aug.soft_logits = 1  # positive_soft_logits[1]  # warning: this value only support 1 augmentation
-            negative_example_aug.soft_logits = 0  # negative_soft_logits[1]
             positive_example_aug.response = pos_response_aug
             positive_example_aug.response_len = len(pos_response_aug)
             negative_example_aug.response = neg_response_aug
             negative_example_aug.response_len = len(neg_response_aug)
+            if hasattr(positive_example_aug, 'aug_soft_logits') and hasattr(negative_example_aug, 'aug_soft_logits'):
+                positive_example_aug.soft_logits = positive_example_aug.aug_soft_logits[pos_aug_idx]
+                negative_example_aug.soft_logits = negative_example_aug.aug_soft_logits[neg_aug_idx]
             positive_feature_aug = self._example_to_feature(index, positive_example_aug)
             negative_feature_aug = self._example_to_feature(index, negative_example_aug)
             features['augment'] = (positive_feature_aug, negative_feature_aug)
@@ -150,6 +158,8 @@ class ContrastiveResponseSelectionDataset(Dataset):
         current_feature["res_sel"]["label"] = torch.tensor(example.label).float()
         if hasattr(example, 'soft_logits'):
             current_feature["res_sel"]["soft_logits"] = torch.tensor(example.soft_logits).float()
+        else:
+            current_feature["res_sel"]["soft_logits"] = current_feature["res_sel"]["label"]
 
         # when the response is the ground truth, append it to utterances.
         if int(example.label) == 1:
@@ -500,11 +510,16 @@ class ContrastiveResponseSelectionDataset(Dataset):
 
     def _max_len_trim_seq(self, dialog_context, response):
 
-        while len(dialog_context) + len(response) > self.hparams.max_sequence_len - 3:
-            if len(dialog_context) > len(response):
-                dialog_context.pop(0)  # from the front
-            else:
-                response.pop()
+        # while len(dialog_context) + len(response) > self.hparams.max_sequence_len - 3:
+        #     if len(dialog_context) > len(response):
+        #         dialog_context.pop(0)  # from the front
+        #     else:
+        #         response.pop()
+
+        while len(dialog_context) > 446:
+            dialog_context.pop(0)
+        while len(response) > 63:
+            response.pop()
 
         return dialog_context, response
 

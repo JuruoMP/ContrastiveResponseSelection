@@ -203,3 +203,41 @@ class ContrastiveEvaluation(object):
 
         pkl.dump(ret_logits, open(f'cache/{self.hparams.task_name}_soft_logits_{datetime.now().strftime("%m%d%H%M%S")}.pkl', 'wb'))
 
+
+    def run_evaluate_with_data(self, evaluation_path, data):
+        self._logger.info("Evaluation")
+        ret = []
+
+        test_dataset = ContrastiveResponseSelectionDataset(
+            self.hparams,
+            split="",
+            data=data,
+        )
+
+        test_dataloader = DataLoader(
+            test_dataset,
+            batch_size=128,
+            num_workers=self.hparams.cpu_workers,
+            drop_last=False,
+        )
+
+        model_state_dict, optimizer_state_dict = load_checkpoint(evaluation_path)
+        print(evaluation_path)
+        if isinstance(self.model, nn.DataParallel):
+            self.model.module.load_state_dict(model_state_dict)
+        else:
+            self.model.load_state_dict(model_state_dict)
+
+        self.model.eval()
+
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(tqdm(test_dataloader)):
+                buffer_batch = batch[0].copy()
+                for key in buffer_batch["res_sel"]:
+                    buffer_batch["res_sel"][key] = buffer_batch["res_sel"][key].to(self.device)
+                buffer_batch_dict = {'original': buffer_batch}
+                logits, loss = self.model(buffer_batch_dict)
+                pred = torch.sigmoid(logits).to("cpu").tolist()
+                ret += pred
+
+        return ret
