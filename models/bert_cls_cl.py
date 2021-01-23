@@ -93,7 +93,7 @@ class BertCls(nn.Module):
         if self.hparams.do_sent_search and (self.training or self.hparams.pca_visualization):
             srch_loss = self._bert_search(batch["srch"], batch["res_sel"]["label"])
 
-        if self.hparams.do_contrastive and (self.training or self.hparams.dump_logits):
+        if self.hparams.do_contrastive and self.training:
             batch_aug = batch_data['augment']
             outputs_aug = self._model(
                 batch_aug["res_sel"]["anno_sent"],
