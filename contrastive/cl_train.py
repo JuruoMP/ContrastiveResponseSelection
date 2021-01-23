@@ -84,6 +84,7 @@ class ContrastiveResponseSelection(object):
                 self.optimizer, num_warmup_steps=self.hparams.warmup_steps,
                 num_training_steps=self.iterations * self.hparams.num_epochs)
         self.scaler = amp.GradScaler()
+        self.cl_loss_ratio = self.hparams.cl_loss_ratio
 
     def _setup_training(self):
         if self.hparams.save_dirpath == 'checkpoints/':
@@ -177,7 +178,7 @@ class ContrastiveResponseSelection(object):
                         loss = loss + task_tensor_loss
 
                 if self.hparams.do_contrastive:
-                    cl_loss = self.hparams.cl_loss_ratio * contrastive_loss.mean()
+                    cl_loss = self.cl_loss_ratio * contrastive_loss.mean()
                     accu_cl_loss += cl_loss.item()
                     cl_loss = self.scaler.scale(cl_loss)
                     loss += cl_loss
@@ -245,6 +246,7 @@ class ContrastiveResponseSelection(object):
                 best_recall_list = recall_list
                 best_model_path = self.previous_model_path
             torch.cuda.empty_cache()
+            self.cl_loss_ratio *= 0.5
 
         print(f'Best recalls: {best_recall_list}, model path: {best_model_path}')
         return best_recall_list, best_model_path
