@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 from datetime import datetime
 
 import numpy as np
@@ -22,6 +23,7 @@ class ContrastiveResponseSelection(object):
         self.hparams = hparams
         self._logger = logging.getLogger(__name__)
 
+        random.seed(hparams.random_seed)
         np.random.seed(hparams.random_seed)
         torch.manual_seed(hparams.random_seed)
         torch.cuda.manual_seed_all(hparams.random_seed)
@@ -232,6 +234,9 @@ class ContrastiveResponseSelection(object):
                         self._logger.info(description)
                         accu_loss, accu_cl_loss, accu_res_sel_loss, accu_ins_loss, accu_del_loss, accu_srch_loss, accu_cnt = 0, 0, 0, 0, 0, 0, 0
 
+                if batch_idx % 500 == 0:
+                    self.cl_loss_ratio *= 0.985
+
             # -------------------------------------------------------------------------
             #   ON EPOCH END  (checkpointing and validation)
             # -------------------------------------------------------------------------
@@ -246,7 +251,6 @@ class ContrastiveResponseSelection(object):
                 best_recall_list = recall_list
                 best_model_path = self.previous_model_path
             torch.cuda.empty_cache()
-            self.cl_loss_ratio *= 0.5
 
         print(f'Best recalls: {best_recall_list}, model path: {best_model_path}')
         return best_recall_list, best_model_path
