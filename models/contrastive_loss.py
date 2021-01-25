@@ -149,10 +149,10 @@ class DynamicNTXentLoss(ConditionalNTXentLoss):
                     torch.cat((distance_matrix[3, 2:3], distance_matrix[3, 0:2]), dim=0)
                 ], dim=0)
                 target_distribution = 1 - distance_matrix_logits
-                target_distribution = target_distribution / target_distribution.sum(dim=1, keepdim=True)
+                target_distribution = target_distribution / (target_distribution.sum(dim=1, keepdim=True) + 1e-6)
             elif len(soft_logits.size()) == 2:
                 target_distribution = soft_logits
-                target_distribution = target_distribution / target_distribution.sum(dim=1, keepdim=True)
+                target_distribution = target_distribution / (target_distribution.sum(dim=1, keepdim=True) + 1e-6)
             else:
                 raise Exception('Invalid soft logits')
             example_loss = self.criterion(logits, target_distribution)
