@@ -156,10 +156,12 @@ class ContrastiveResponseSelectionDataset(Dataset):
                 p = random.random()
                 if p < 0.1:
                     new_token_list.append(self.del_placeholder)
-                elif p < 0.2 or i == len(token_list):
+                elif p < 0.2:
                     pass
                 else:
                     new_token_list.append(token_list[i])
+                if len(new_token_list) == 0:
+                    new_token_list = token_list
         if reorder:
             raise NotImplementedError
         return new_token_list
