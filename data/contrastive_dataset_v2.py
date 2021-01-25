@@ -33,7 +33,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
         self.input_examples = []
         utterance_len_dict = dict()
         if data is None:
-            data_path = os.path.join(hparams.data_dir, "%s_%s_aug.pkl" % (hparams.task_name, split))
+            data_path = os.path.join(hparams.data_dir, "%s_%s.pkl" % (hparams.task_name, split))
             with open(data_path, "rb") as pkl_handle:
                 while True:
                     try:
@@ -117,28 +117,24 @@ class ContrastiveResponseSelectionDataset(Dataset):
         """
         if self.split == 'train':
             positive_example, negative_example = self.input_examples[index]
-            if not hasattr(positive_example, 'soft_logits') or not hasattr(negative_example, 'soft_logits'):
-                positive_example.soft_logits = 1.0
-                negative_example.soft_logits = 0.0
-            positive_feature = self._example_to_feature(index, positive_example)
-            negative_feature = self._example_to_feature(index, negative_example)
-            features = {'original': (positive_feature, negative_feature)}
-
             pos_response_aug, neg_response_aug = self._nlp_augment(positive_example.response), self._nlp_augment(negative_example.response)
+            all_responses = [positive_example.response, pos_response_aug, negative_example.response, neg_response_aug]
+            dist_matrix = self._jaccard_distance_batch(all_responses)
             positive_example_aug, negative_example_aug = copy.deepcopy(positive_example), copy.deepcopy(negative_example)
             positive_example_aug.response = pos_response_aug
             positive_example_aug.response_len = len(pos_response_aug)
             negative_example_aug.response = neg_response_aug
             negative_example_aug.response_len = len(neg_response_aug)
-            if hasattr(positive_example_aug, 'aug_soft_logits') and hasattr(negative_example_aug, 'aug_soft_logits'):
-                positive_example_aug.soft_logits = 1.0
-                negative_example_aug.soft_logits = 0.1
-            else:
-                positive_example_aug.soft_logits = 1.0
-                negative_example_aug.soft_logits = 0.0
+            positive_example.soft_logits = [dist_matrix[0][1], dist_matrix[0][2], dist_matrix[0][3]]
+            positive_example_aug.soft_logits = [dist_matrix[1][0], dist_matrix[1][2], dist_matrix[1][3]]
+            negative_example.soft_logits = [dist_matrix[2][3], dist_matrix[2][0], dist_matrix[2][1]]
+            negative_example_aug.soft_logits = [dist_matrix[3][2], dist_matrix[3][0], dist_matrix[3][1]]
+            positive_feature = self._example_to_feature(index, positive_example)
+            negative_feature = self._example_to_feature(index, negative_example)
             positive_feature_aug = self._example_to_feature(index, positive_example_aug)
             negative_feature_aug = self._example_to_feature(index, negative_example_aug)
-            features['augment'] = (positive_feature_aug, negative_feature_aug)
+            features = {'original': (positive_feature, negative_feature),
+                        'augment': (positive_feature_aug, negative_feature_aug)}
 
             if self.split == 'train' and self.hparams.do_rank_loss:
                 retrieve_response = positive_example.retrieve
@@ -154,13 +150,25 @@ class ContrastiveResponseSelectionDataset(Dataset):
         return features
 
     def _nlp_augment(self, token_list, do_del=True, reorder=False):
+        new_token_list = []
         if do_del:
             for i in range(len(token_list)):
-                if random.random() < 0.15:
-                    token_list[i] = self.del_placeholder
+                p = random.random()
+                if p < 0.1:
+                    new_token_list.append(self.del_placeholder)
+                elif p < 0.2 or i == len(token_list):
+                    pass
+                else:
+                    new_token_list.append(token_list[i])
         if reorder:
             raise NotImplementedError
-        return token_list
+        return new_token_list
+
+    @staticmethod
+    def _jaccard_distance_batch(uttrs):
+        f_jaccard = lambda x, y: len(set(x) & set(y)) / len(set(x) | set(y))
+        matrix = [[f_jaccard(uttrs[i], uttrs[j]) for j in range(len(uttrs))] for i in range(len(uttrs))]
+        return matrix
 
     def _example_to_feature(self, index, example):
         current_feature = dict()

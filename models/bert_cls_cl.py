@@ -114,8 +114,15 @@ class BertCls(nn.Module):
                 soft_logits, soft_logits_aug = logits.detach(), logits_aug.detach()
             else:
                 soft_logits, soft_logits_aug = batch['res_sel']['soft_logits'], batch_aug['res_sel']['soft_logits']  # n_example, n_example
-            soft_labels = torch.stack((soft_logits, soft_logits_aug), dim=1).view(-1, 4)  # n_query * 4
-            contrastive_loss = self._nt_xent_criterion(z, z_aug, soft_labels=soft_labels)
+            if len(soft_logits.size()) == 1:
+                batch_soft_logits = torch.stack((soft_logits, soft_logits_aug), dim=1).view(-1, 4)  # n_query * 4
+            elif len(soft_logits.size()) == 2:
+                soft_logits = soft_logits.split(2, dim=0)
+                soft_logits_aug = soft_logits_aug.split(2, dim=0)
+                batch_soft_logits = [torch.cat((x, y), dim=0) for x, y in zip(soft_logits, soft_logits_aug)]
+            else:
+                raise Exception('Invalid soft logits')
+            contrastive_loss = self._nt_xent_criterion(z, z_aug, batch_soft_logits=batch_soft_logits)
 
         if self.hparams.do_rank_loss and self.training:
             batch_retrieve = batch_data['retrieve']
