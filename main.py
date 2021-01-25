@@ -166,6 +166,7 @@ if __name__ == '__main__':
                             help="electra_gen_config", default="")  # electra-base-gen, electra-base-chinese-gen
     arg_parser.add_argument("--use_batch_negative", dest="use_batch_negative", type=bool, default=False,
                             help="Use all examples in the batch as negative for contrastive learning")
+    arg_parser.add_argument("--use_soft_logits", dest="use_soft_logits", type=bool, default=False)
 
     args = arg_parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_ids
@@ -182,6 +183,7 @@ if __name__ == '__main__':
     hparams["task_type"] = args.task_type
     hparams["training_type"] = args.training_type
     hparams["use_batch_negative"] = args.use_batch_negative
+    hparams["use_soft_logits"] = args.use_soft_logits
 
     set_random_seed(hparams['random_seed'])
 
