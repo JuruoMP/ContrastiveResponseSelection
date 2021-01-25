@@ -151,17 +151,14 @@ class ContrastiveResponseSelectionDataset(Dataset):
 
     def _nlp_augment(self, token_list, do_del=True, reorder=False):
         new_token_list = []
+        del_ids = [random.randint(0, len(token_list) - 1) for _ in range(len(token_list) // 4)]
         if do_del:
             for i in range(len(token_list)):
-                p = random.random()
-                if p < 0.1:
-                    new_token_list.append(self.del_placeholder)
-                elif p < 0.2:
-                    pass
+                if i in del_ids:
+                    if len(new_token_list) == 0 or new_token_list[-1] != self.del_placeholder:
+                        new_token_list.append(self.del_placeholder)
                 else:
                     new_token_list.append(token_list[i])
-                if len(new_token_list) == 0:
-                    new_token_list = token_list
         if reorder:
             raise NotImplementedError
         return new_token_list
