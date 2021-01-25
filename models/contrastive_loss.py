@@ -112,16 +112,16 @@ class DynamicNTXentLoss(ConditionalNTXentLoss):
             loss = loss.mean()
         return loss
 
-    def forward(self, zis, zjs, soft_labels=None):
+    def forward(self, zis, zjs, batch_soft_logits=None):
         device = zis.device
         batch_size = zis.size(0)
         zis_list = zis.split(2, dim=0)
         zjs_list = zjs.split(2, dim=0)
-        if soft_labels is None:
-            soft_labels = [None for _ in range(len(zis_list))]
+        if batch_soft_logits is None:
+            batch_soft_logits = [None for _ in range(len(zis_list))]
 
         loss = 0
-        for zis, zjs, soft_logits in zip(zis_list, zjs_list, soft_labels):
+        for zis, zjs, soft_logits in zip(zis_list, zjs_list, batch_soft_logits):
             representations = torch.cat([zjs, zis], dim=0)
 
             similarity_matrix = self.similarity_function(representations.unsqueeze(1), representations.unsqueeze(0))
@@ -140,7 +140,7 @@ class DynamicNTXentLoss(ConditionalNTXentLoss):
             if soft_logits is None:
                 target_distribution = torch.zeros(4, 3).to(device).float()
                 target_distribution[:, 0] = 1
-            else:
+            elif len(soft_logits.size()) == 1:
                 distance_matrix = torch.abs(soft_logits.unsqueeze(1) - soft_logits.unsqueeze(0))
                 distance_matrix_logits = torch.stack([
                     distance_matrix[0, 1:],
@@ -150,6 +150,11 @@ class DynamicNTXentLoss(ConditionalNTXentLoss):
                 ], dim=0)
                 target_distribution = 1 - distance_matrix_logits
                 target_distribution = target_distribution / target_distribution.sum(dim=1, keepdim=True)
+            elif len(soft_logits.size()) == 2:
+                target_distribution = soft_logits
+                target_distribution = target_distribution / target_distribution.sum(dim=1, keepdim=True)
+            else:
+                raise Exception('Invalid soft logits')
             example_loss = self.criterion(logits, target_distribution)
             # standard_ce_loss = torch.nn.functional.cross_entropy(logits, torch.LongTensor([0, 0, 0, 0]).to(logits.device), reduction='sum')
             loss += example_loss
