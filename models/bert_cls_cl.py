@@ -112,10 +112,7 @@ class BertCls(nn.Module):
 
             batch_soft_logits = None
             if self.hparams.use_soft_logits:
-                if self.hparams.dynamic_logits:
-                    soft_logits, soft_logits_aug = logits.detach(), logits_aug.detach()
-                else:
-                    soft_logits, soft_logits_aug = batch['res_sel']['soft_logits'], batch_aug['res_sel']['soft_logits']  # n_example, n_example
+                soft_logits, soft_logits_aug = batch['res_sel']['soft_logits'], batch_aug['res_sel']['soft_logits']  # n_example, n_example
                 if len(soft_logits.size()) == 1:
                     batch_soft_logits = torch.stack((soft_logits, soft_logits_aug), dim=1).view(-1, 4)  # n_query * 4
                 elif len(soft_logits.size()) == 2:

@@ -33,7 +33,11 @@ class ContrastiveResponseSelectionDataset(Dataset):
         self.input_examples = []
         utterance_len_dict = dict()
         if data is None:
-            data_path = os.path.join(hparams.data_dir, "%s_%s.pkl" % (hparams.task_name, split))
+            if hparams.curriculum_learning and split == 'train':
+                data_file = "%s_%s_sorted.pkl" % (hparams.task_name, split)
+            else:
+                data_file = "%s_%s.pkl" % (hparams.task_name, split)
+            data_path = os.path.join(hparams.data_dir, data_file)
             with open(data_path, "rb") as pkl_handle:
                 while True:
                     try:
@@ -133,6 +137,8 @@ class ContrastiveResponseSelectionDataset(Dataset):
             negative_feature = self._example_to_feature(index, negative_example)
             positive_feature_aug = self._example_to_feature(index, positive_example_aug)
             negative_feature_aug = self._example_to_feature(index, negative_example_aug)
+            positive_feature["res_sel"]['sim'] = negative_feature["res_sel"]['sim'] = \
+                self._jaccard_similarity(positive_example.response, negative_example.response)
             features = {'original': (positive_feature, negative_feature),
                         'augment': (positive_feature_aug, negative_feature_aug)}
 
@@ -165,6 +171,10 @@ class ContrastiveResponseSelectionDataset(Dataset):
                 x, y = random.randint(0, len(new_token_list) - 1), random.randint(0, len(new_token_list) - 1)
                 new_token_list[x], new_token_list[y] = new_token_list[y], new_token_list[x]
         return new_token_list
+
+    @staticmethod
+    def _jaccard_similarity(x, y):
+        return len(set(x) & set(y)) / len(set(x) | set(y))
 
     @staticmethod
     def _jaccard_similarity_batch(uttrs):

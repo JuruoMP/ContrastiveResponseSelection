@@ -180,7 +180,11 @@ class ContrastiveResponseSelection(object):
                         loss = loss + task_tensor_loss
 
                 if self.hparams.do_contrastive:
-                    cl_loss = self.cl_loss_ratio * contrastive_loss.mean()
+                    cl_loss_weight = torch.exp(buffer_batch['original']['res_sel']['sim'][::2]).detach()
+                    cl_loss = torch.stack(contrastive_loss, dim=0).view(-1)
+                    if self.hparams.dynamic_weight:
+                        cl_loss = cl_loss_weight * cl_loss
+                    cl_loss = self.cl_loss_ratio * cl_loss.mean()
                     accu_cl_loss += cl_loss.item()
                     cl_loss = self.scaler.scale(cl_loss)
                     loss += cl_loss
@@ -234,8 +238,8 @@ class ContrastiveResponseSelection(object):
                         self._logger.info(description)
                         accu_loss, accu_cl_loss, accu_res_sel_loss, accu_ins_loss, accu_del_loss, accu_srch_loss, accu_cnt = 0, 0, 0, 0, 0, 0, 0
 
-                if batch_idx % 500 == 0:
-                    self.cl_loss_ratio *= 0.985
+                # if batch_idx % 500 == 0:
+                #     self.cl_loss_ratio *= 0.985
 
             # -------------------------------------------------------------------------
             #   ON EPOCH END  (checkpointing and validation)
