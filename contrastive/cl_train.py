@@ -16,6 +16,7 @@ from contrastive.cl_evaluation import ContrastiveEvaluation
 from data.contrastive_dataset_v2 import ContrastiveResponseSelectionDataset
 from models import Model
 from models.utils.checkpointing import CheckpointManager, load_checkpoint
+import global_variables
 
 
 class ContrastiveResponseSelection(object):
@@ -125,6 +126,10 @@ class ContrastiveResponseSelection(object):
         self._build_model()
         self._setup_training()
 
+        global_variables.num_iter = len(self.train_dataset) // self.hparams.virtual_batch_size
+        global_variables.epoch = -1
+        global_variables.step = 0
+
         # ins, del, mod check!
 
         # Evaluation Setup
@@ -142,10 +147,12 @@ class ContrastiveResponseSelection(object):
         best_recall_list, best_model_path = [0], ''
 
         for epoch in range(self.start_epoch, self.hparams.num_epochs + 1):
+            global_variables.epoch = epoch
             self.model.train()
             tqdm_batch_iterator = tqdm(self.train_dataloader)
             accu_batch = 0
             for batch_idx, batch in enumerate(tqdm_batch_iterator):
+                global_variables.step += 1
 
                 buffer_batch = batch.copy()
                 for group in buffer_batch:

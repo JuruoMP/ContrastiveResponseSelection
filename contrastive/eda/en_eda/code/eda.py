@@ -180,11 +180,13 @@ def add_word(new_words):
 # main data augmentation function
 ########################################################################
 
-def eda(sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_aug=9):
-    sentence = get_only_chars(sentence)
+def eda(ori_sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_aug=9):
+    sentence = get_only_chars(ori_sentence)
     words = sentence.split(' ')
     words = [word for word in words if word != '']
     num_words = len(words)
+    if num_words == 0:
+        return [ori_sentence]
 
     augmented_sentences = []
     num_new_per_technique = int(num_aug / 4) + 1
@@ -228,5 +230,6 @@ def eda(sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_aug=9)
 
     # append the original sentence
     augmented_sentences.append(sentence)
+    random.shuffle(augmented_sentences)
 
     return augmented_sentences
