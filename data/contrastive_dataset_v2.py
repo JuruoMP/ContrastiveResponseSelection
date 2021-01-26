@@ -119,7 +119,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
             positive_example, negative_example = self.input_examples[index]
             pos_response_aug, neg_response_aug = self._nlp_augment(positive_example.response), self._nlp_augment(negative_example.response)
             all_responses = [positive_example.response, pos_response_aug, negative_example.response, neg_response_aug]
-            dist_matrix = self._jaccard_distance_batch(all_responses)
+            dist_matrix = self._edit_distance_similarity_batch(all_responses)
             positive_example_aug, negative_example_aug = copy.deepcopy(positive_example), copy.deepcopy(negative_example)
             positive_example_aug.response = pos_response_aug
             positive_example_aug.response_len = len(pos_response_aug)
@@ -149,24 +149,43 @@ class ContrastiveResponseSelectionDataset(Dataset):
 
         return features
 
-    def _nlp_augment(self, token_list, do_del=True, reorder=False):
+    def _nlp_augment(self, token_list, do_del=True, do_reorder=True):
         new_token_list = []
-        del_ids = [random.randint(0, len(token_list) - 1) for _ in range(len(token_list) // 4)]
         if do_del:
+            del_ids = [random.randint(0, len(token_list) - 1) for _ in range(len(token_list) // 4)]
             for i in range(len(token_list)):
                 if i in del_ids:
                     if len(new_token_list) == 0 or new_token_list[-1] != self.del_placeholder:
                         new_token_list.append(self.del_placeholder)
                 else:
                     new_token_list.append(token_list[i])
-        if reorder:
-            raise NotImplementedError
+        if do_reorder:
+            n_times = len(new_token_list) // 8
+            for i in range(n_times):
+                x, y = random.randint(0, len(new_token_list) - 1), random.randint(0, len(new_token_list) - 1)
+                new_token_list[x], new_token_list[y] = new_token_list[y], new_token_list[x]
         return new_token_list
 
     @staticmethod
-    def _jaccard_distance_batch(uttrs):
+    def _jaccard_similarity_batch(uttrs):
         f_jaccard = lambda x, y: len(set(x) & set(y)) / len(set(x) | set(y))
         matrix = [[f_jaccard(uttrs[i], uttrs[j]) for j in range(len(uttrs))] for i in range(len(uttrs))]
+        return matrix
+
+    @staticmethod
+    def _edit_distance_similarity_batch(uttrs):
+        def edit_distance(str1, str2):
+            matrix = [[i + j for j in range(len(str2) + 1)] for i in range(len(str1) + 1)]
+            for i in range(1, len(str1) + 1):
+                for j in range(1, len(str2) + 1):
+                    if str1[i - 1] == str2[j - 1]:
+                        d = 0
+                    else:
+                        d = 1
+                    matrix[i][j] = min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + d)
+            return matrix[len(str1)][len(str2)]
+        f_edit_similarity = lambda x, y: 1 / (edit_distance(x, y) + 1e-3)
+        matrix = [[f_edit_similarity(uttrs[i], uttrs[j]) for j in range(len(uttrs))] for i in range(len(uttrs))]
         return matrix
 
     def _example_to_feature(self, index, example):
