@@ -109,8 +109,8 @@ BASE_PARAMS = defaultdict(
     use_batch_negative=False,
     do_augment_response_selection=False,
     do_rank_loss=False,
-    dynamic_weight=False,  # dynamic cl loss weight
     use_soft_logits=False,  # cl loss with softmax weight
+    dynamic_weight=False,  # dynamic cl loss weight
     curriculum_learning=False,
 
     max_sequence_len=512,

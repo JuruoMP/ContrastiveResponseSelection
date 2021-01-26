@@ -158,9 +158,12 @@ class ContrastiveResponseSelectionDataset(Dataset):
     def _nlp_augment(self, token_list, do_del=True, do_reorder=True):
         new_token_list = []
         if do_del:
-            del_ids = [random.randint(0, len(token_list) - 1) for _ in range(len(token_list) // 4)]
+            while True:
+                del_labels = [True if random.random() < 0.2 else False for _ in range(len(token_list))]
+                if not all(del_labels):
+                    break
             for i in range(len(token_list)):
-                if i in del_ids:
+                if del_labels[i]:
                     if len(new_token_list) == 0 or new_token_list[-1] != self.del_placeholder:
                         new_token_list.append(self.del_placeholder)
                 else:
@@ -176,9 +179,9 @@ class ContrastiveResponseSelectionDataset(Dataset):
     def _jaccard_similarity(x, y):
         return len(set(x) & set(y)) / len(set(x) | set(y))
 
-    @staticmethod
-    def _jaccard_similarity_batch(uttrs):
-        f_jaccard = lambda x, y: len(set(x) & set(y)) / len(set(x) | set(y))
+    def _jaccard_similarity_batch(self, uttrs):
+        uttrs = [set(x) - {self.del_placeholder} for x in uttrs]
+        f_jaccard = lambda x, y: len(x & y) / len(x | y)
         matrix = [[f_jaccard(uttrs[i], uttrs[j]) for j in range(len(uttrs))] for i in range(len(uttrs))]
         return matrix
 

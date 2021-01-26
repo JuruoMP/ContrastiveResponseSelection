@@ -137,26 +137,25 @@ class DynamicNTXentLoss(ConditionalNTXentLoss):
             logits = torch.cat((positives, negatives), dim=1)
             logits /= self.temperature
 
-            # if soft_logits is None:
-            #     target_distribution = torch.zeros(4, 3).to(device).float()
-            #     target_distribution[:, 0] = 1
-            # elif len(soft_logits.size()) == 1:
-            #     distance_matrix = torch.abs(soft_logits.unsqueeze(1) - soft_logits.unsqueeze(0))
-            #     distance_matrix_logits = torch.stack([
-            #         distance_matrix[0, 1:],
-            #         torch.cat((distance_matrix[1, 0:1], distance_matrix[1, 2:4]), dim=0),
-            #         torch.cat((distance_matrix[2, 3:4], distance_matrix[2, 0:2]), dim=0),
-            #         torch.cat((distance_matrix[3, 2:3], distance_matrix[3, 0:2]), dim=0)
-            #     ], dim=0)
-            #     target_distribution = 1 - distance_matrix_logits + 1e-6
-            #     target_distribution = target_distribution / target_distribution.sum(dim=1, keepdim=True)
-            # elif len(soft_logits.size()) == 2:
-            #     target_distribution = soft_logits + 1e-6
-            #     target_distribution = target_distribution / target_distribution.sum(dim=1, keepdim=True)
-            # else:
-            #     raise Exception('Invalid soft logits')
-            # example_loss = self.criterion(logits, target_distribution)
-            standard_ce_loss = torch.nn.functional.cross_entropy(logits, torch.LongTensor([0, 0, 0, 0]).to(logits.device), reduction='mean')
-            losses.append(standard_ce_loss)
+            if soft_logits is None:
+                example_loss = torch.nn.functional.cross_entropy(logits, torch.LongTensor([0, 0, 0, 0]).to(logits.device), reduction='mean')
+            elif len(soft_logits.size()) == 1:
+                distance_matrix = torch.abs(soft_logits.unsqueeze(1) - soft_logits.unsqueeze(0))
+                distance_matrix_logits = torch.stack([
+                    distance_matrix[0, 1:],
+                    torch.cat((distance_matrix[1, 0:1], distance_matrix[1, 2:4]), dim=0),
+                    torch.cat((distance_matrix[2, 3:4], distance_matrix[2, 0:2]), dim=0),
+                    torch.cat((distance_matrix[3, 2:3], distance_matrix[3, 0:2]), dim=0)
+                ], dim=0)
+                target_distribution = 1 - distance_matrix_logits + 1e-6
+                target_distribution = target_distribution / target_distribution.sum(dim=1, keepdim=True)
+                example_loss = self.criterion(logits, target_distribution)
+            elif len(soft_logits.size()) == 2:
+                target_distribution = soft_logits + 1e-6
+                target_distribution = target_distribution / target_distribution.sum(dim=1, keepdim=True)
+                example_loss = self.criterion(logits, target_distribution)
+            else:
+                raise Exception('Invalid soft logits')
+            losses.append(example_loss)
 
         return losses
