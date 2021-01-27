@@ -218,7 +218,7 @@ def eda(ori_sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_au
             a_words = random_deletion(words, p_rd)
             augmented_sentences.append(' '.join(a_words))
 
-    augmented_sentences = [get_only_chars(sentence) for sentence in augmented_sentences]
+    # augmented_sentences = [get_only_chars(sentence) for sentence in augmented_sentences]
     shuffle(augmented_sentences)
 
     # trim so that we have the desired number of augmented sentences
