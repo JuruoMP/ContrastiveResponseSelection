@@ -9,6 +9,9 @@ from torch.utils.data.dataloader import default_collate
 
 from models.bert import tokenization_bert
 from data.ubuntu_corpus_v1.ubuntu_data_utils import InputExamples
+from contrastive.eda.en_eda.code.eda import eda as en_eda
+from contrastive.eda.zh_eda.code.eda import eda as zh_eda
+import global_variables
 
 
 class ContrastiveResponseSelectionDataset(Dataset):
@@ -28,6 +31,10 @@ class ContrastiveResponseSelectionDataset(Dataset):
 
         self.hparams = hparams
         self.split = split
+        if hparams.task_name == 'ubuntu':
+            self.eda = en_eda
+        else:
+            self.eda = zh_eda()
 
         # read pkls -> Input Examples
         self.input_examples = []
@@ -65,6 +72,8 @@ class ContrastiveResponseSelectionDataset(Dataset):
                 vocab_file=os.path.join(bert_pretrained_dir, "%s-vocab.txt" % self.hparams.bert_pretrained))
             contexts, responses = data
             for context, response in zip(contexts, responses):
+                context = [self._bert_tokenizer.tokenize(x) for x in context.split('\t')]
+                response = self._bert_tokenizer.tokenize(response)
                 dialog_len = [len(x) for x in context]
                 input_example = InputExamples(
                     utterances=context, response=response, label=1,
@@ -156,23 +165,27 @@ class ContrastiveResponseSelectionDataset(Dataset):
         return features
 
     def _nlp_augment(self, token_list, do_del=True, do_reorder=True):
-        new_token_list = []
-        if do_del:
-            while True:
-                del_labels = [True if random.random() < 0.2 else False for _ in range(len(token_list))]
-                if not all(del_labels):
-                    break
-            for i in range(len(token_list)):
-                if del_labels[i]:
-                    if len(new_token_list) == 0 or new_token_list[-1] != self.del_placeholder:
-                        new_token_list.append(self.del_placeholder)
-                else:
-                    new_token_list.append(token_list[i])
-        if do_reorder:
-            n_times = len(new_token_list) // 8
-            for i in range(n_times):
-                x, y = random.randint(0, len(new_token_list) - 1), random.randint(0, len(new_token_list) - 1)
-                new_token_list[x], new_token_list[y] = new_token_list[y], new_token_list[x]
+        # new_token_list = []
+        # if do_del:
+        #     while True:
+        #         del_labels = [True if random.random() < 0.2 else False for _ in range(len(token_list))]
+        #         if not all(del_labels):
+        #             break
+        #     for i in range(len(token_list)):
+        #         if del_labels[i]:
+        #             if len(new_token_list) == 0 or new_token_list[-1] != self.del_placeholder:
+        #                 new_token_list.append(self.del_placeholder)
+        #         else:
+        #             new_token_list.append(token_list[i])
+        # if do_reorder:
+        #     n_times = len(new_token_list) // 8
+        #     for i in range(n_times):
+        #         x, y = random.randint(0, len(new_token_list) - 1), random.randint(0, len(new_token_list) - 1)
+        #         new_token_list[x], new_token_list[y] = new_token_list[y], new_token_list[x]
+        augment_alpha = 0.1 * (global_variables.epoch + 1)
+        text = ' '.join([x for x in token_list]).replace(' ##', '')
+        new_text = self.eda(text, alpha_sr=augment_alpha, alpha_ri=augment_alpha, alpha_rs=augment_alpha)[0]
+        new_token_list = self._bert_tokenizer.tokenize(new_text)
         return new_token_list
 
     @staticmethod
