@@ -239,13 +239,12 @@ class ContrastiveResponseSelection(object):
             self._logger.info(self.previous_model_path)
 
             torch.cuda.empty_cache()
-            if epoch > 1:  # todo: this is not beautiful
-                self._logger.info("Evaluation after %d epoch" % epoch)
-                recall_list = evaluation.run_evaluate(self.previous_model_path)
-                if recall_list[0] > best_recall_list[0]:
-                    best_recall_list = recall_list
-                    best_model_path = self.previous_model_path
-                torch.cuda.empty_cache()
+            self._logger.info("Evaluation after %d epoch" % epoch)
+            recall_list = evaluation.run_evaluate(self.previous_model_path)
+            if recall_list[0] > best_recall_list[0]:
+                best_recall_list = recall_list
+                best_model_path = self.previous_model_path
+            torch.cuda.empty_cache()
 
         print(f'Best recalls: {best_recall_list}, model path: {best_model_path}')
         return best_recall_list, best_model_path

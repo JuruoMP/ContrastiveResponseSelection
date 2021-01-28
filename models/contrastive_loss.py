@@ -159,7 +159,9 @@ class DynamicNTXentLoss(ConditionalNTXentLoss):
                 raise Exception('Invalid soft logits')
             losses.append(example_loss)
 
-            hinge_loss = torch.clamp(0.2 + torch.exp(positives[0]) - 1, min=0)
+            probs = torch.exp(logits) / torch.exp(logits).sum(dim=1, keepdim=True)
+            hinge_loss = torch.clamp(0.2 + probs[0][0] - 1, min=0) + \
+                         torch.clamp(1 + probs[0][1] - 1, min=0)
             hinge_losses.append(hinge_loss)
 
         return losses, hinge_losses

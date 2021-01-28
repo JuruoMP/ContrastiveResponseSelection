@@ -34,7 +34,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
         if hparams.task_name == 'ubuntu':
             self.eda = en_eda
         else:
-            self.eda = zh_eda()
+            self.eda = zh_eda
 
         # read pkls -> Input Examples
         self.input_examples = []
@@ -168,7 +168,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
         #     for i in range(n_times):
         #         x, y = random.randint(0, len(new_token_list) - 1), random.randint(0, len(new_token_list) - 1)
         #         new_token_list[x], new_token_list[y] = new_token_list[y], new_token_list[x]
-        augment_alpha = 0.1 * (global_variables.epoch + 1)
+        augment_alpha = 0.1 * min(global_variables.epoch + 1, 2)
         text = ' '.join([x for x in token_list]).replace(' ##', '')
         new_text = self.eda(text, alpha_sr=augment_alpha, alpha_ri=augment_alpha, alpha_rs=augment_alpha)[0]
         new_token_list = self._bert_tokenizer.tokenize(new_text)
