@@ -140,8 +140,8 @@ class ContrastiveResponseSelection(object):
 
         train_begin = datetime.utcnow()  # New
         global_iteration_step = 0
-        accu_loss, accu_res_sel_loss, accu_ins_loss, accu_del_loss, accu_srch_loss = 0, 0, 0, 0, 0
-        accu_cl_loss, accu_rank_loss = 0, 0
+        accu_loss, accu_res_sel_loss = 0, 0
+        accu_cl_loss, accu_hinge_loss = 0, 0
         accu_cnt = 0
 
         best_recall_list, best_model_path = [0], ''
@@ -163,29 +163,12 @@ class ContrastiveResponseSelection(object):
                 buffer_batch = batch
                 with amp.autocast():
                     _, losses = self.model(buffer_batch)
-                res_sel_loss, ins_loss, del_loss, srch_loss, contrastive_loss, rank_loss = losses
+                res_sel_loss, contrastive_loss, hinge_loss = losses
                 if res_sel_loss is not None:
                     res_sel_loss = self.hparams.res_sel_loss_ratio * res_sel_loss.mean()
                     accu_res_sel_loss += res_sel_loss.item()
 
-                if ins_loss is not None:
-                    ins_loss = self.hparams.ins_loss_ratio * ins_loss.mean()
-                    accu_ins_loss += ins_loss.item()
-
-                if del_loss is not None:
-                    del_loss = self.hparams.del_loss_ratio * del_loss.mean()
-                    accu_del_loss += del_loss.item()
-
-                if srch_loss is not None:
-                    srch_loss = self.hparams.srch_loss_ratio * srch_loss.mean()
-                    accu_srch_loss += srch_loss.item()
-
                 loss = self.scaler.scale(res_sel_loss)
-                for task_tensor_loss in [ins_loss, del_loss, srch_loss]:
-                    if task_tensor_loss is not None:
-                        task_tensor_loss = self.scaler.scale(task_tensor_loss)
-                        loss = loss + task_tensor_loss
-
                 if self.hparams.do_contrastive:
                     cl_loss_weight = torch.exp(buffer_batch['original']['res_sel']['sim'][::2]).detach()
                     cl_loss = torch.stack(contrastive_loss, dim=0).view(-1)
@@ -196,11 +179,12 @@ class ContrastiveResponseSelection(object):
                     cl_loss = self.scaler.scale(cl_loss)
                     loss += cl_loss
 
-                if self.hparams.do_rank_loss:
-                    rank_loss = self.hparams.rank_loss_ratio * rank_loss.mean()
-                    accu_rank_loss += rank_loss.item()
-                    rank_loss = self.scaler.scale(rank_loss)
-                    loss += rank_loss
+                if self.hparams.do_hinge_loss:
+                    hinge_loss = torch.stack(hinge_loss, dim=0).view(-1)
+                    hinge_loss = self.hparams.hinge_loss_ratio * hinge_loss.mean()
+                    accu_hinge_loss += hinge_loss.item()
+                    hinge_loss = self.scaler.scale(hinge_loss)
+                    loss += hinge_loss
 
                 loss.backward()
                 accu_loss += loss.item()
@@ -232,18 +216,17 @@ class ContrastiveResponseSelection(object):
                     #     accu_srch_loss / accu_cnt,
                     #     self.optimizer.param_groups[0]['lr'])
                     description = "[Epoch:{:2d}][Iter:{:3d}][Loss: {:.2e}]" \
-                                  "[Res/CL/Rank/Ins/Del/Srch: {:.2e}/{:.2e}/{:.2e}/{:.2e}/{:.2e}/{:.2e}][lr: {:.2e}]".format(
+                                  "[Res/CL/Hinge: {:.2e}/{:.2e}/{:.2e}][lr: {:.2e}]".format(
                         epoch,
                         global_iteration_step, accu_loss / accu_cnt, accu_res_sel_loss / accu_cnt,
-                        accu_cl_loss / accu_cnt, accu_rank_loss / accu_cnt,
-                        accu_ins_loss / accu_cnt, accu_del_loss / accu_cnt, accu_srch_loss / accu_cnt,
+                        accu_cl_loss / accu_cnt, accu_hinge_loss / accu_cnt,
                         self.optimizer.param_groups[0]['lr'])
                     tqdm_batch_iterator.set_description(description)
 
                     # tensorboard
                     if global_iteration_step % self.hparams.tensorboard_step == 0:
                         self._logger.info(description)
-                        accu_loss, accu_cl_loss, accu_res_sel_loss, accu_ins_loss, accu_del_loss, accu_srch_loss, accu_cnt = 0, 0, 0, 0, 0, 0, 0
+                        accu_loss, accu_cl_loss, accu_res_sel_loss, accu_cnt = 0, 0, 0, 0
 
                 # if batch_idx % 500 == 0:
                 #     self.cl_loss_ratio *= 0.985

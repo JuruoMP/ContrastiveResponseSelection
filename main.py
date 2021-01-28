@@ -55,21 +55,15 @@ EVAL_TYPE_MAP = {
 }
 
 MULTI_TASK_TYPE_MAP = {
-    "ins": INSERTION_PARAMS,
-    "del": DELETION_PARAMS,
-    "srch": SEARCH_PARAMS,
     "contras": CONTRASTIVE_PARAMS,
+    "hinge": HINGE_PARAMS,
     "aug": AUGMENT_PARAMS,
-    "rank": RANK_PARAMS,
 }
 
 
 def set_random_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -159,7 +153,7 @@ if __name__ == '__main__':
     arg_parser.add_argument("--training_type", dest="training_type", type=str, default="fine_tuning",
                             help="fine_tuning or post_training")
     arg_parser.add_argument("--multi_task_type", dest="multi_task_type", type=str, default="",
-                            help="ins,del,srch,contras,aug,rank")
+                            help="contras,hinge")
     arg_parser.add_argument("--gpu_ids", dest="gpu_ids", type=str,
                             help="gpu_ids", default="0")
     arg_parser.add_argument("--electra_gen_config", dest="electra_gen_config", type=str,

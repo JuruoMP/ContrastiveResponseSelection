@@ -110,12 +110,6 @@ class ContrastiveResponseSelectionDataset(Dataset):
         # End of Turn Token
         if self.hparams.do_eot:
             self._bert_tokenizer.add_tokens(["[EOT]"])
-        if self.hparams.do_sent_insertion:
-            self._bert_tokenizer.add_tokens(["[INS]"])
-        if self.hparams.do_sent_deletion:
-            self._bert_tokenizer.add_tokens(["[DEL]"])
-        if self.hparams.do_sent_search:
-            self._bert_tokenizer.add_tokens(["[SRCH]"])
 
     def __len__(self):
         return len(self.input_examples)
@@ -150,14 +144,6 @@ class ContrastiveResponseSelectionDataset(Dataset):
                 self._jaccard_similarity(positive_example.response, negative_example.response)
             features = {'original': (positive_feature, negative_feature),
                         'augment': (positive_feature_aug, negative_feature_aug)}
-
-            if self.split == 'train' and self.hparams.do_rank_loss:
-                retrieve_response = positive_example.retrieve
-                retrieve_example = copy.deepcopy(positive_example)
-                retrieve_example.response = retrieve_response
-                retrieve_example.response_len = len(retrieve_response)
-                retrieve_feature = self._example_to_feature(index, retrieve_example)
-                features['retrieve'] = retrieve_feature
 
         else:
             features = [self._example_to_feature(index, example) for example in self.input_examples[index]]
@@ -225,45 +211,6 @@ class ContrastiveResponseSelectionDataset(Dataset):
         current_feature["res_sel"]["label"] = torch.tensor(example.label).float()
         if hasattr(example, 'soft_logits'):
             current_feature["res_sel"]["soft_logits"] = torch.tensor(example.soft_logits).float()
-
-        # # when the response is the ground truth, append it to utterances.
-        # if int(example.label) == 1:
-        #     example.utterances.append(example.response)
-        #
-        # if len(example.utterances) == 1 and self.split == "train":
-        #     return self._single_turn_processing(current_feature)  # why here?
-        #
-        # if self.hparams.do_sent_insertion and (self.split == "train" or self.hparams.pca_visualization):
-        #     anno_sent, segment_ids, attention_mask, ins_pos, target_idx = self._insertion_annotate_sentence(example)
-        #     current_feature["ins"] = dict()
-        #     current_feature["ins"]["anno_sent"] = torch.tensor(anno_sent).long()
-        #     current_feature["ins"]["segment_ids"] = torch.tensor(segment_ids).long()
-        #     current_feature["ins"]["attention_mask"] = torch.tensor(attention_mask).long()
-        #     current_feature["ins"]["ins_pos"] = torch.tensor(ins_pos).long()
-        #     current_feature["ins"]["label"] = torch.tensor(target_idx).long()
-        #
-        # if self.hparams.do_sent_deletion and (self.split == "train" or self.hparams.pca_visualization):
-        #     while True:
-        #         target_idx = random.sample(list(range(self.num_input_examples)), 1)[0]
-        #         target_example = self.input_examples[target_idx]
-        #         if target_idx != index and len(target_example.utterances) > 2:
-        #             break
-        #     anno_sent, segment_ids, attention_mask, del_pos, target_idx = self._deletion_annotate_sentence(example, target_example)
-        #     current_feature["del"] = dict()
-        #     current_feature["del"]["anno_sent"] = torch.tensor(anno_sent).long()
-        #     current_feature["del"]["segment_ids"] = torch.tensor(segment_ids).long()
-        #     current_feature["del"]["attention_mask"] = torch.tensor(attention_mask).long()
-        #     current_feature["del"]["del_pos"] = torch.tensor(del_pos).long()
-        #     current_feature["del"]["label"] = torch.tensor(target_idx).long()
-        #
-        # if self.hparams.do_sent_search and (self.split == "train" or self.hparams.pca_visualization):
-        #     anno_sent, segment_ids, attention_mask, srch_pos, target_idx = self._search_annotate_sentence(example)
-        #     current_feature["srch"] = dict()
-        #     current_feature["srch"]["anno_sent"] = torch.tensor(anno_sent).long()
-        #     current_feature["srch"]["segment_ids"] = torch.tensor(segment_ids).long()
-        #     current_feature["srch"]["attention_mask"] = torch.tensor(attention_mask).long()
-        #     current_feature["srch"]["srch_pos"] = torch.tensor(srch_pos).long()
-        #     current_feature["srch"]["label"] = torch.tensor(target_idx).long()
 
         return current_feature
 
