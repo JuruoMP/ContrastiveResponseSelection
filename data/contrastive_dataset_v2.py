@@ -118,10 +118,11 @@ class ContrastiveResponseSelectionDataset(Dataset):
         """
         if self.split == 'train':
             positive_example, negative_example = self.input_examples[index]
+            p_context_augment = global_variables.epoch / 10
             n_context_turns = len(positive_example.utterances)
-            if random.random() < global_variables.epoch * 0.1:
-                n_least_turns = 3
-                if n_context_turns > n_least_turns + 1:
+            n_least_turns = 3
+            if n_context_turns > n_least_turns + 1:
+                if random.random() < p_context_augment:
                     st_turn = random.randint(1, n_context_turns - n_least_turns)
                     positive_example.utterances = positive_example.utterances[st_turn:]
                     negative_example.utterances = negative_example.utterances[st_turn:]

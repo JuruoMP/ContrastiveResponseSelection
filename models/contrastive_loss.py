@@ -160,8 +160,8 @@ class DynamicNTXentLoss(ConditionalNTXentLoss):
             losses.append(example_loss)
 
             probs = torch.exp(logits) / torch.exp(logits).sum(dim=1, keepdim=True)
-            hinge_loss = torch.clamp(0.2 + probs[0][0] - 1, min=0) + \
-                         torch.clamp(1 + probs[0][1] - 1, min=0)
+            hinge_loss = torch.clamp(0.0 + probs[:, 0] - 1, min=0).mean() + \
+                         torch.clamp(1 + probs[:, 1:] - 1, min=0).mean()
             hinge_losses.append(hinge_loss)
 
         return losses, hinge_losses

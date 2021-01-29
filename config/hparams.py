@@ -61,11 +61,11 @@ BASE_PARAMS = defaultdict(
     virtual_batch_size=64,
 
     # Training BERT params
-    learning_rate=3e-05,  # 2e-05
+    learning_rate=2e-05,  # 2e-05
     # learning_rate=2e-5,
 
     dropout_keep_prob=0.8,
-    num_epochs=5,
+    num_epochs=10,
     max_gradient_norm=5,
     adam_epsilon=1e-8,
     weight_decay=0.0,

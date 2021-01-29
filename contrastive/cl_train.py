@@ -127,8 +127,7 @@ class ContrastiveResponseSelection(object):
         self._setup_training()
 
         global_variables.num_iter = len(self.train_dataset) // self.hparams.virtual_batch_size
-        global_variables.epoch = -1
-        global_variables.step = 0
+        global_variables.epoch = 0
 
         # ins, del, mod check!
 
@@ -152,7 +151,6 @@ class ContrastiveResponseSelection(object):
             tqdm_batch_iterator = tqdm(self.train_dataloader)
             accu_batch = 0
             for batch_idx, batch in enumerate(tqdm_batch_iterator):
-                global_variables.step += 1
 
                 buffer_batch = batch.copy()
                 for group in buffer_batch:
@@ -207,6 +205,7 @@ class ContrastiveResponseSelection(object):
                     accu_batch = 0
 
                     global_iteration_step += 1
+                    global_variables.global_step += 1
                     # description = "[{}][Epoch: {:3d}][Iter: {:6d}][Loss: {:6f}][Res_Loss: {:4f}]" \
                     #               "[Ins_Loss: {:4f}][Del_Loss: {:4f}][Srch_Loss: {:4f}][lr: {:7f}]".format(
                     #     datetime.utcnow() - train_begin,
