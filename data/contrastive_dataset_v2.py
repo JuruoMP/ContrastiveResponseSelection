@@ -118,6 +118,14 @@ class ContrastiveResponseSelectionDataset(Dataset):
         """
         if self.split == 'train':
             positive_example, negative_example = self.input_examples[index]
+            n_context_turns = len(positive_example.utterances)
+            if random.random() < global_variables.epoch * 0.1:
+                n_least_turns = 3
+                if n_context_turns > n_least_turns + 1:
+                    st_turn = random.randint(1, n_context_turns - n_least_turns)
+                    positive_example.utterances = positive_example.utterances[st_turn:]
+                    negative_example.utterances = negative_example.utterances[st_turn:]
+                    negative_example.response = random.sample(negative_example.utterances[:st_turn], 1)[0]
             pos_response_aug, neg_response_aug = self._nlp_augment(positive_example.response), self._nlp_augment(negative_example.response)
             all_responses = [positive_example.response, pos_response_aug, negative_example.response, neg_response_aug]
             dist_matrix = self._edit_distance_similarity_batch(all_responses)
@@ -145,7 +153,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
         return features
 
     def _nlp_augment(self, token_list, do_del=True, do_reorder=True):
-        augment_alpha = 0.1 * min(global_variables.epoch, 2)
+        augment_alpha = 0.2#  * min(global_variables.epoch, 2)
         if self.hparams.task_name == 'ubuntu':
             text = ' '.join([x for x in token_list]).replace(' ##', '')
             new_text = self.eda(text, alpha_sr=augment_alpha, alpha_ri=augment_alpha, alpha_rs=augment_alpha)[0]

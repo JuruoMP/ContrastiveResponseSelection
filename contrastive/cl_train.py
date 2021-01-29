@@ -228,12 +228,14 @@ class ContrastiveResponseSelection(object):
                         self._logger.info(description)
                         accu_loss, accu_cl_loss, accu_res_sel_loss, accu_cnt = 0, 0, 0, 0
 
-                # if batch_idx % 500 == 0:
-                #     self.cl_loss_ratio *= 0.985
+                if batch_idx == len(self.train_dataloader) // 2:
+                    recall_list = evaluation.run_evaluate(self.model)
+                    if recall_list[0] > best_recall_list[0]:
+                        best_recall_list = recall_list
+                        state_dict = self.model.module.state_dict() if isinstance(self.model, nn.DataParallel) else self.model.state_dict()
+                        torch.save(state_dict, os.path.join(self.checkpoint_manager.ckpt_dirpath, 'best.pt'))
+                    self.model.train()
 
-            # -------------------------------------------------------------------------
-            #   ON EPOCH END  (checkpointing and validation)
-            # -------------------------------------------------------------------------
             self.checkpoint_manager.step(epoch)
             self.previous_model_path = os.path.join(self.checkpoint_manager.ckpt_dirpath, "checkpoint_%d.pth" % (epoch))
             self._logger.info(self.previous_model_path)
@@ -244,6 +246,8 @@ class ContrastiveResponseSelection(object):
             if recall_list[0] > best_recall_list[0]:
                 best_recall_list = recall_list
                 best_model_path = self.previous_model_path
+                state_dict = self.model.module.state_dict() if isinstance(self.model, nn.DataParallel) else self.model.state_dict()
+                torch.save(state_dict, os.path.join(self.checkpoint_manager.ckpt_dirpath, 'best.pt'))
             torch.cuda.empty_cache()
 
         print(f'Best recalls: {best_recall_list}, model path: {best_model_path}')

@@ -98,14 +98,26 @@ class ContrastiveEvaluation(object):
         if -1 not in self.hparams.gpu_ids and len(self.hparams.gpu_ids) > 1:
             self.model = nn.DataParallel(self.model, self.hparams.gpu_ids)
 
-    def run_evaluate(self, evaluation_path):
+    def run_evaluate(self, evaluation_path_or_model):
         self._logger.info("Evaluation")
-        model_state_dict, optimizer_state_dict = load_checkpoint(evaluation_path)
-        print(evaluation_path)
-        if isinstance(self.model, nn.DataParallel):
-            self.model.module.load_state_dict(model_state_dict)
+        if isinstance(evaluation_path_or_model, str):
+            evaluation_path = evaluation_path_or_model
+            model_state_dict, optimizer_state_dict = load_checkpoint(evaluation_path)
+            print(evaluation_path)
+            if isinstance(self.model, nn.DataParallel):
+                self.model.module.load_state_dict(model_state_dict)
+            else:
+                self.model.load_state_dict(model_state_dict)
         else:
-            self.model.load_state_dict(model_state_dict)
+            if isinstance(evaluation_path_or_model, nn.DataParallel):
+                model = evaluation_path_or_model.module
+            else:
+                model = evaluation_path_or_model
+            if isinstance(self.model, nn.DataParallel):
+                self.model.module.load_state_dict(model.state_dict())
+            else:
+                self.model.load_state_dict(model.state_dict())
+
 
         k_list = self.hparams.recall_k_list
         total_mrr, total_prec_at_one, total_map = 0, 0, 0
