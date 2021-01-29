@@ -49,7 +49,7 @@ def get_only_chars(line):
         else:
             clean_line += ' '
 
-    clean_line = re.sub(' +', ' ', clean_line)  # delete extra spaces
+    # clean_line = re.sub(' +', ' ', clean_line)  # delete extra spaces
     if clean_line[0] == ' ':
         clean_line = clean_line[1:]
     return clean_line
