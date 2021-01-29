@@ -9,8 +9,6 @@ from torch.utils.data.dataloader import default_collate
 
 from models.bert import tokenization_bert
 from data.ubuntu_corpus_v1.ubuntu_data_utils import InputExamples
-from contrastive.eda.en_eda.code.eda import eda as en_eda
-from contrastive.eda.zh_eda.code.eda import eda as zh_eda
 import global_variables
 
 
@@ -32,19 +30,17 @@ class ContrastiveResponseSelectionDataset(Dataset):
         self.hparams = hparams
         self.split = split
         if hparams.task_name == 'ubuntu':
-            self.eda = en_eda
+            from contrastive.eda.en_eda.code.eda import eda
+            self.eda = eda
         else:
-            self.eda = zh_eda
+            from contrastive.eda.zh_eda.code.eda import eda
+            self.eda = eda
 
         # read pkls -> Input Examples
         self.input_examples = []
         utterance_len_dict = dict()
         if data is None:
-            if hparams.curriculum_learning and split == 'train':
-                data_file = "%s_%s_sorted.pkl" % (hparams.task_name, split)
-            else:
-                data_file = "%s_%s.pkl" % (hparams.task_name, split)
-            data_path = os.path.join(hparams.data_dir, data_file)
+            data_path = os.path.join(hparams.data_dir, "%s_%s.pkl" % (hparams.task_name, split))
             with open(data_path, "rb") as pkl_handle:
                 while True:
                     try:
@@ -105,8 +101,6 @@ class ContrastiveResponseSelectionDataset(Dataset):
         self._bert_tokenizer = tokenization_bert.BertTokenizer(
             vocab_file=os.path.join(bert_pretrained_dir, "%s-vocab.txt" % self.hparams.bert_pretrained))
 
-        self.del_placeholder = '[unused0]'
-
         # End of Turn Token
         if self.hparams.do_eot:
             self._bert_tokenizer.add_tokens(["[EOT]"])
@@ -151,38 +145,20 @@ class ContrastiveResponseSelectionDataset(Dataset):
         return features
 
     def _nlp_augment(self, token_list, do_del=True, do_reorder=True):
-        # new_token_list = []
-        # if do_del:
-        #     while True:
-        #         del_labels = [True if random.random() < 0.2 else False for _ in range(len(token_list))]
-        #         if not all(del_labels):
-        #             break
-        #     for i in range(len(token_list)):
-        #         if del_labels[i]:
-        #             if len(new_token_list) == 0 or new_token_list[-1] != self.del_placeholder:
-        #                 new_token_list.append(self.del_placeholder)
-        #         else:
-        #             new_token_list.append(token_list[i])
-        # if do_reorder:
-        #     n_times = len(new_token_list) // 8
-        #     for i in range(n_times):
-        #         x, y = random.randint(0, len(new_token_list) - 1), random.randint(0, len(new_token_list) - 1)
-        #         new_token_list[x], new_token_list[y] = new_token_list[y], new_token_list[x]
-        augment_alpha = 0.1 * min(global_variables.epoch + 1, 2)
-        text = ' '.join([x for x in token_list]).replace(' ##', '')
-        new_text = self.eda(text, alpha_sr=augment_alpha, alpha_ri=augment_alpha, alpha_rs=augment_alpha)[0]
+        augment_alpha = 0.1 * min(global_variables.epoch, 2)
+        if self.hparams.task_name == 'ubuntu':
+            text = ' '.join([x for x in token_list]).replace(' ##', '')
+            new_text = self.eda(text, alpha_sr=augment_alpha, alpha_ri=augment_alpha, alpha_rs=augment_alpha)[0]
+        else:
+            text = ''.join(token_list)
+            new_text = self.eda(text, alpha_sr=0, alpha_ri=augment_alpha, alpha_rs=augment_alpha)[0]
+        # new_text = text
         new_token_list = self._bert_tokenizer.tokenize(new_text)
         return new_token_list
 
     @staticmethod
     def _jaccard_similarity(x, y):
         return len(set(x) & set(y)) / len(set(x) | set(y))
-
-    def _jaccard_similarity_batch(self, uttrs):
-        uttrs = [set(x) - {self.del_placeholder} for x in uttrs]
-        f_jaccard = lambda x, y: len(x & y) / len(x | y)
-        matrix = [[f_jaccard(uttrs[i], uttrs[j]) for j in range(len(uttrs))] for i in range(len(uttrs))]
-        return matrix
 
     @staticmethod
     def _edit_distance_similarity_batch(uttrs):
