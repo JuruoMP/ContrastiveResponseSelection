@@ -144,7 +144,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
                         'augment': (positive_feature_aug, negative_feature_aug)}
 
             # extra contrastive data
-            contras_idx = random.randint(0, len(self.input_examples) // 2)
+            contras_idx = random.randint(0, len(self.input_examples) // 2 - 1)
             contrastive_positive_example = self.input_examples[2 * contras_idx][0]
             dialogue = contrastive_positive_example.utterances + [contrastive_positive_example.response]
             n_context_turns = len(dialogue)

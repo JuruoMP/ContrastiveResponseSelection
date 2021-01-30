@@ -73,7 +73,7 @@ class BertCls(nn.Module):
         mask = batch["res_sel"]["label"] == -1
         res_sel_loss = res_sel_losses.masked_fill(mask, 0).mean()
 
-        if random.random() < 0.2 * global_variables.epoch:  # 0.5:
+        if random.random() > 0.2 * global_variables.epoch or not self.training:  # 0.5:
             batch_aug = batch_data['augment']
             outputs_aug = self._model(
                 batch_aug["res_sel"]["anno_sent"],
