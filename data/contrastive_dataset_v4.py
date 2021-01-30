@@ -61,8 +61,6 @@ class ContrastiveResponseSelectionDataset(Dataset):
                             print("%d examples has been loaded!" % len(self.input_examples))
                             if self.hparams.pca_visualization:
                                 break
-                        if len(self.input_examples) >= 5000:
-                            break
                     except EOFError:
                         break
         else:
