@@ -13,7 +13,7 @@ from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
 
 from contrastive.cl_evaluation import ContrastiveEvaluation
-from data.contrastive_dataset_v2 import ContrastiveResponseSelectionDataset
+from data.contrastive_dataset_v3 import ContrastiveResponseSelectionDataset
 from models import Model
 from models.utils.checkpointing import CheckpointManager, load_checkpoint
 import global_variables
@@ -168,10 +168,7 @@ class ContrastiveResponseSelection(object):
 
                 loss = self.scaler.scale(res_sel_loss)
                 if self.hparams.do_contrastive:
-                    cl_loss_weight = torch.exp(buffer_batch['original']['res_sel']['sim'][::2]).detach()
                     cl_loss = torch.stack(contrastive_loss, dim=0).view(-1)
-                    if self.hparams.dynamic_weight:
-                        cl_loss = cl_loss_weight * cl_loss
                     cl_loss = self.cl_loss_ratio * cl_loss.mean()
                     accu_cl_loss += cl_loss.item()
                     cl_loss = self.scaler.scale(cl_loss)

@@ -56,8 +56,8 @@ EVAL_TYPE_MAP = {
 
 MULTI_TASK_TYPE_MAP = {
     "contras": CONTRASTIVE_PARAMS,
-    "hinge": HINGE_PARAMS,
     "aug": AUGMENT_PARAMS,
+    "extra": EXTRA_CONTRASTIVE_PARAMS,
 }
 
 
@@ -153,7 +153,7 @@ if __name__ == '__main__':
     arg_parser.add_argument("--training_type", dest="training_type", type=str, default="fine_tuning",
                             help="fine_tuning or post_training")
     arg_parser.add_argument("--multi_task_type", dest="multi_task_type", type=str, default="",
-                            help="contras,hinge")
+                            help="contras,hinge,extra")
     arg_parser.add_argument("--gpu_ids", dest="gpu_ids", type=str,
                             help="gpu_ids", default="0")
     arg_parser.add_argument("--electra_gen_config", dest="electra_gen_config", type=str,
@@ -161,7 +161,6 @@ if __name__ == '__main__':
     arg_parser.add_argument("--use_batch_negative", dest="use_batch_negative", type=bool, default=False,
                             help="Use all examples in the batch as negative for contrastive learning")
     arg_parser.add_argument("--use_soft_logits", dest="use_soft_logits", type=bool, default=False)
-    arg_parser.add_argument("--dynamic_weight", dest="dynamic_weight", type=bool, default=False)
     arg_parser.add_argument("--curriculum_learning", dest="curriculum_learning", type=bool, default=False)
 
     args = arg_parser.parse_args()
@@ -180,7 +179,6 @@ if __name__ == '__main__':
     hparams["training_type"] = args.training_type
     hparams["use_batch_negative"] = args.use_batch_negative
     hparams["use_soft_logits"] = args.use_soft_logits
-    hparams["dynamic_weight"] = args.dynamic_weight
     hparams["curriculum_learning"] = args.curriculum_learning
 
     set_random_seed(hparams['random_seed'])

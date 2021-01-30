@@ -52,8 +52,6 @@ class BertCls(nn.Module):
         if self.hparams.use_batch_negative:
             self._nt_xent_criterion = NTXentLoss(temperature=0.5, use_cosine_similarity=True)
         self._nt_xent_criterion = DynamicNTXentLoss(temperature=0.5, use_cosine_similarity=True)
-        self.hinge_lambda = 0.4
-        self.return_augment = False
 
     @amp.autocast()
     def forward(self, batch_data):
@@ -103,7 +101,27 @@ class BertCls(nn.Module):
                     raise Exception('Invalid soft logits')
             contrastive_loss, hinge_loss = self._nt_xent_criterion(z, z_aug, batch_soft_logits=batch_soft_logits)
 
-        if not self.return_augment:  # todo: useless
-            return logits, (res_sel_loss, contrastive_loss, hinge_loss)
-        else:
-            return (logits, logits_aug), (res_sel_loss, contrastive_loss, hinge_loss)
+            if 'contras' in batch_data and 'contras_aug' in batch_data:
+                batch_contras = batch_data['contras']
+                outputs_contras = self._model(
+                    batch_contras["res_sel"]["anno_sent"],
+                    token_type_ids=batch_contras["res_sel"]["segment_ids"],
+                    attention_mask=batch_contras["res_sel"]["attention_mask"]
+                )
+                bert_outputs_contras = outputs_contras[0]
+                cls_logits_contras = bert_outputs_contras[:, 0, :]
+                z_contras = self._projection(cls_logits_contras)
+                batch_contras_aug = batch_data['contras_aug']
+                outputs_contras_aug = self._model(
+                    batch_contras_aug["res_sel"]["anno_sent"],
+                    token_type_ids=batch_contras_aug["res_sel"]["segment_ids"],
+                    attention_mask=batch_contras_aug["res_sel"]["attention_mask"]
+                )
+                bert_outputs_contras_aug = outputs_contras_aug[0]
+                cls_logits_contras_aug = bert_outputs_contras_aug[:, 0, :]
+                z_contras_aug = self._projection(cls_logits_contras_aug)
+                contrastive_loss_contras, _ = self._nt_xent_criterion(z_contras, z_contras_aug)
+
+                contrastive_loss = contrastive_loss + contrastive_loss_contras
+
+        return logits, (res_sel_loss, contrastive_loss, hinge_loss)

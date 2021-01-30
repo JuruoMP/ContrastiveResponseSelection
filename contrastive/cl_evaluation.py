@@ -9,7 +9,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from data.contrastive_dataset_v2 import ContrastiveResponseSelectionDataset
+from data.contrastive_dataset_v3 import ContrastiveResponseSelectionDataset
 from models import Model
 from models.utils.checkpointing import load_checkpoint
 from models.utils.scorer import calculate_candidates_ranking, logits_mrr, \
@@ -95,8 +95,8 @@ class ContrastiveEvaluation(object):
         self.model = Model(self.hparams)
         self.model = self.model.to(self.device)
         # Use Multi-GPUs
-        if -1 not in self.hparams.gpu_ids and len(self.hparams.gpu_ids) > 1:
-            self.model = nn.DataParallel(self.model, self.hparams.gpu_ids)
+        # if -1 not in self.hparams.gpu_ids and len(self.hparams.gpu_ids) > 1:
+        #     self.model = nn.DataParallel(self.model, self.hparams.gpu_ids)
 
     def run_evaluate(self, evaluation_path_or_model):
         self._logger.info("Evaluation")
