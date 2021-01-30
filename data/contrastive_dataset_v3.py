@@ -147,12 +147,17 @@ class ContrastiveResponseSelectionDataset(Dataset):
             if self.hparams.do_extra_contrastive:  # new contrastive learning example
                 dialogue = positive_example.utterances + [positive_example.response]
                 n_context_turns = len(dialogue)
-                n_new_context_turns = random.randint(1, n_context_turns - 2)
-                st_turn = random.randint(0, n_context_turns - n_new_context_turns - 1)
-                ed_turn = st_turn + n_new_context_turns - 1
-                response_candidates = (set(range(0, st_turn)) | set(range(ed_turn + 1, n_context_turns))) - {ed_turn + 1}
-                positive_response = dialogue[ed_turn + 1]
-                negative_response = dialogue[random.sample(response_candidates, 1)[0]]
+                if n_context_turns <= 2:
+                    st_turn, ed_turn = 0, n_context_turns - 1
+                    positive_response = dialogue[-1]
+                    negative_response = random.sample(self.input_examples, 1)[0][0].response
+                else:
+                    n_new_context_turns = random.randint(1, n_context_turns - 2)
+                    st_turn = random.randint(0, n_context_turns - n_new_context_turns - 1)
+                    ed_turn = st_turn + n_new_context_turns - 1
+                    response_candidates = (set(range(0, st_turn)) | set(range(ed_turn + 1, n_context_turns))) - {ed_turn + 1}
+                    positive_response = dialogue[ed_turn + 1]
+                    negative_response = dialogue[random.sample(response_candidates, 1)[0]]
                 positive_example_contras = InputExamples(
                     utterances=dialogue[st_turn:ed_turn + 1], response=positive_response, label=-1,
                     seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(positive_response))
