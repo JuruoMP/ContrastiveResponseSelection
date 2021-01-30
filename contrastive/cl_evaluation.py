@@ -9,7 +9,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from data.contrastive_dataset_v2 import ContrastiveResponseSelectionDataset
+from data.contrastive_dataset_v3 import ContrastiveResponseSelectionDataset
 from models import Model
 from models.utils.checkpointing import load_checkpoint
 from models.utils.scorer import calculate_candidates_ranking, logits_mrr, \

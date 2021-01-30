@@ -48,7 +48,7 @@ class BertCls(nn.Module):
             nn.Linear(self.hparams.projection_dim, self.hparams.projection_dim)
         )
 
-        self._criterion = nn.BCEWithLogitsLoss()
+        self._criterion = nn.BCEWithLogitsLoss(reduction='none')
         if self.hparams.use_batch_negative:
             self._nt_xent_criterion = NTXentLoss(temperature=0.5, use_cosine_similarity=True)
         self._nt_xent_criterion = DynamicNTXentLoss(temperature=0.5, use_cosine_similarity=True)
@@ -69,7 +69,9 @@ class BertCls(nn.Module):
         cls_logits = bert_outputs[:, 0, :]  # bs, bert_output_size
         logits = self._classification(cls_logits)  # bs, 1
         logits = logits.squeeze(-1)
-        res_sel_loss = self._criterion(logits, batch["res_sel"]["label"])
+        res_sel_losses = self._criterion(logits, batch["res_sel"]["label"].float())
+        mask = batch["res_sel"]["label"] == -1
+        res_sel_loss = res_sel_losses.masked_fill(mask, 0).mean()
 
         if self.hparams.do_contrastive and self.training:
             batch_aug = batch_data['augment']
