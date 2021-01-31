@@ -105,13 +105,9 @@ class ContrastiveResponseSelection(object):
             load_pthpath = os.path.join(self.hparams.bert_pretrained_dir, self.hparams.bert_pretrained, self.hparams.load_pthpath)
             model_state_dict, optimizer_state_dict = load_checkpoint(load_pthpath)
             if isinstance(self.model, nn.DataParallel):
-                self.model.module._model.resize_token_embeddings(self.model.module._model.config.vocab_size - 1)  # [EOT]
                 self.model.module.load_state_dict(model_state_dict)
-                self.model.module._model.resize_token_embeddings(self.model.module._model.config.vocab_size + 1)  # [EOT]
             else:
-                self.model._model.resize_token_embeddings(self.model._model.config.vocab_size - 1)  # [EOT]
                 self.model.load_state_dict(model_state_dict)
-                self.model._model.resize_token_embeddings(self.model._model.config.vocab_size + 1)  # [EOT]
             self.optimizer.load_state_dict(optimizer_state_dict)
             self.previous_model_path = self.hparams.load_pthpath
             print("Loaded model from {}".format(self.hparams.load_pthpath))
