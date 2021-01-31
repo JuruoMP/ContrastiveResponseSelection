@@ -73,54 +73,55 @@ class BertCls(nn.Module):
         mask = batch["res_sel"]["label"] == -1
         res_sel_loss = res_sel_losses.masked_fill(mask, 0).mean()
 
-        if random.random() > 0.2 * global_variables.epoch or not self.training:  # 0.5:
-            batch_aug = batch_data['augment']
-            outputs_aug = self._model(
-                batch_aug["res_sel"]["anno_sent"],
-                token_type_ids=batch_aug["res_sel"]["segment_ids"],
-                attention_mask=batch_aug["res_sel"]["attention_mask"]
-            )
-            bert_outputs_aug = outputs_aug[0]
-            cls_logits_aug = bert_outputs_aug[:, 0, :]
-            z = self._projection(cls_logits)
-            z_aug = self._projection(cls_logits_aug)
+        if self.training:
+            if random.random() > 0.2 * global_variables.epoch:  # 0.5:
+                batch_aug = batch_data['augment']
+                outputs_aug = self._model(
+                    batch_aug["res_sel"]["anno_sent"],
+                    token_type_ids=batch_aug["res_sel"]["segment_ids"],
+                    attention_mask=batch_aug["res_sel"]["attention_mask"]
+                )
+                bert_outputs_aug = outputs_aug[0]
+                cls_logits_aug = bert_outputs_aug[:, 0, :]
+                z = self._projection(cls_logits)
+                z_aug = self._projection(cls_logits_aug)
 
-            logits_aug = self._classification(cls_logits_aug)  # bs, 1
-            logits_aug = logits_aug.squeeze(-1)
-            if self.hparams.do_augment_response_selection:
-                res_sel_loss = (res_sel_loss + self._criterion(logits_aug, batch_aug["res_sel"]["label"])) / 2
+                logits_aug = self._classification(cls_logits_aug)  # bs, 1
+                logits_aug = logits_aug.squeeze(-1)
+                if self.hparams.do_augment_response_selection:
+                    res_sel_loss = (res_sel_loss + self._criterion(logits_aug, batch_aug["res_sel"]["label"])) / 2
 
-            batch_soft_logits = None
-            if self.hparams.use_soft_logits:
-                soft_logits, soft_logits_aug = batch['res_sel']['soft_logits'], batch_aug['res_sel']['soft_logits']  # n_example, n_example
-                if len(soft_logits.size()) == 1:
-                    batch_soft_logits = torch.stack((soft_logits, soft_logits_aug), dim=1).view(-1, 4)  # n_query * 4
-                elif len(soft_logits.size()) == 2:
-                    soft_logits = soft_logits.split(2, dim=0)
-                    soft_logits_aug = soft_logits_aug.split(2, dim=0)
-                    batch_soft_logits = [torch.cat((x, y), dim=0) for x, y in zip(soft_logits, soft_logits_aug)]
-                else:
-                    raise Exception('Invalid soft logits')
-            contrastive_loss, hinge_loss = self._nt_xent_criterion(z, z_aug, batch_soft_logits=batch_soft_logits)
-        else:
-            batch_contras = batch_data['contras']
-            outputs_contras = self._model(
-                batch_contras["res_sel"]["anno_sent"],
-                token_type_ids=batch_contras["res_sel"]["segment_ids"],
-                attention_mask=batch_contras["res_sel"]["attention_mask"]
-            )
-            bert_outputs_contras = outputs_contras[0]
-            cls_logits_contras = bert_outputs_contras[:, 0, :]
-            z_contras = self._projection(cls_logits_contras)
-            batch_contras_aug = batch_data['contras_aug']
-            outputs_contras_aug = self._model(
-                batch_contras_aug["res_sel"]["anno_sent"],
-                token_type_ids=batch_contras_aug["res_sel"]["segment_ids"],
-                attention_mask=batch_contras_aug["res_sel"]["attention_mask"]
-            )
-            bert_outputs_contras_aug = outputs_contras_aug[0]
-            cls_logits_contras_aug = bert_outputs_contras_aug[:, 0, :]
-            z_contras_aug = self._projection(cls_logits_contras_aug)
-            contrastive_loss, hinge_loss = self._nt_xent_criterion(z_contras, z_contras_aug)
+                batch_soft_logits = None
+                if self.hparams.use_soft_logits:
+                    soft_logits, soft_logits_aug = batch['res_sel']['soft_logits'], batch_aug['res_sel']['soft_logits']  # n_example, n_example
+                    if len(soft_logits.size()) == 1:
+                        batch_soft_logits = torch.stack((soft_logits, soft_logits_aug), dim=1).view(-1, 4)  # n_query * 4
+                    elif len(soft_logits.size()) == 2:
+                        soft_logits = soft_logits.split(2, dim=0)
+                        soft_logits_aug = soft_logits_aug.split(2, dim=0)
+                        batch_soft_logits = [torch.cat((x, y), dim=0) for x, y in zip(soft_logits, soft_logits_aug)]
+                    else:
+                        raise Exception('Invalid soft logits')
+                contrastive_loss, hinge_loss = self._nt_xent_criterion(z, z_aug, batch_soft_logits=batch_soft_logits)
+            else:
+                batch_contras = batch_data['contras']
+                outputs_contras = self._model(
+                    batch_contras["res_sel"]["anno_sent"],
+                    token_type_ids=batch_contras["res_sel"]["segment_ids"],
+                    attention_mask=batch_contras["res_sel"]["attention_mask"]
+                )
+                bert_outputs_contras = outputs_contras[0]
+                cls_logits_contras = bert_outputs_contras[:, 0, :]
+                z_contras = self._projection(cls_logits_contras)
+                batch_contras_aug = batch_data['contras_aug']
+                outputs_contras_aug = self._model(
+                    batch_contras_aug["res_sel"]["anno_sent"],
+                    token_type_ids=batch_contras_aug["res_sel"]["segment_ids"],
+                    attention_mask=batch_contras_aug["res_sel"]["attention_mask"]
+                )
+                bert_outputs_contras_aug = outputs_contras_aug[0]
+                cls_logits_contras_aug = bert_outputs_contras_aug[:, 0, :]
+                z_contras_aug = self._projection(cls_logits_contras_aug)
+                contrastive_loss, hinge_loss = self._nt_xent_criterion(z_contras, z_contras_aug)
 
         return logits, (res_sel_loss, contrastive_loss, hinge_loss)
