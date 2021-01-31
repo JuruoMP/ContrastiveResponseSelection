@@ -147,6 +147,8 @@ if __name__ == '__main__':
     arg_parser.add_argument("--bert_checkpoint_path", dest="bert_checkpoint_path", type=str,
                             default="bert-base-uncased-pytorch_model.bin",
                             help="bert pretrained directory")  # bert-base-uncased, bert-post-uncased
+    arg_parser.add_argument("--load_pthpath", dest="load_pthpath", type=str, default="",
+                            help="bert pretrained directory")  # bert-base-uncased, bert-post-uncased
     arg_parser.add_argument("--evaluate", dest="evaluate", type=str,
                             help="Evaluation Checkpoint", default="")
     arg_parser.add_argument("--training_type", dest="training_type", type=str, default="fine_tuning",
@@ -172,6 +174,7 @@ if __name__ == '__main__':
     hparams["bert_pretrained_dir"] = args.bert_pretrained_dir
     hparams["bert_pretrained"] = args.bert_pretrained
     hparams["bert_checkpoint_path"] = args.bert_checkpoint_path
+    hparams["load_pthpath"] = args.load_pthpath
     hparams["model_type"] = args.model
     hparams["task_name"] = args.task_name
     hparams["task_type"] = args.task_type
