@@ -139,8 +139,7 @@ class ContrastiveResponseSelection(object):
 
         train_begin = datetime.utcnow()  # New
         global_iteration_step = 0
-        accu_loss, accu_res_sel_loss = 0, 0
-        accu_cl_loss, accu_hinge_loss = 0, 0
+        accu_loss, accu_res_sel_loss, accu_cl_loss = 0, 0, 0
         accu_cnt = 0
 
         best_recall_list, best_model_path = [0], ''
@@ -204,11 +203,10 @@ class ContrastiveResponseSelection(object):
                     #     accu_res_sel_loss / accu_cnt, accu_ins_loss / accu_cnt, accu_del_loss / accu_cnt,
                     #     accu_srch_loss / accu_cnt,
                     #     self.optimizer.param_groups[0]['lr'])
-                    description = "[Epoch:{:2d}][Iter:{:3d}][Loss: {:.2e}]" \
-                                  "[Res/CL/Hinge: {:.2e}/{:.2e}/{:.2e}][lr: {:.2e}]".format(
+                    description = "[Epoch:{:2d}][Iter:{:3d}][Loss: {:.2e}][Res/CL: {:.2e}/{:.2e}][lr: {:.2e}]".format(
                         epoch,
                         global_iteration_step, accu_loss / accu_cnt, accu_res_sel_loss / accu_cnt,
-                        accu_cl_loss / accu_cnt, accu_hinge_loss / accu_cnt,
+                        accu_cl_loss / accu_cnt,
                         self.optimizer.param_groups[0]['lr'])
                     tqdm_batch_iterator.set_description(description)
 
@@ -217,13 +215,13 @@ class ContrastiveResponseSelection(object):
                         self._logger.info(description)
                         accu_loss, accu_cl_loss, accu_res_sel_loss, accu_cnt = 0, 0, 0, 0
 
-                if batch_idx == len(self.train_dataloader) // 2:
-                    recall_list = evaluation.run_evaluate(self.model)
-                    if recall_list[0] > best_recall_list[0]:
-                        best_recall_list = recall_list
-                        state_dict = self.model.module.state_dict() if isinstance(self.model, nn.DataParallel) else self.model.state_dict()
-                        torch.save(state_dict, os.path.join(self.checkpoint_manager.ckpt_dirpath, 'best.pt'))
-                    self.model.train()
+                # if batch_idx == len(self.train_dataloader) // 2:
+                #     recall_list = evaluation.run_evaluate(self.model)
+                #     if recall_list[0] > best_recall_list[0]:
+                #         best_recall_list = recall_list
+                #         state_dict = self.model.module.state_dict() if isinstance(self.model, nn.DataParallel) else self.model.state_dict()
+                #         torch.save(state_dict, os.path.join(self.checkpoint_manager.ckpt_dirpath, 'best.pt'))
+                #     self.model.train()
 
             self.checkpoint_manager.step(epoch)
             self.previous_model_path = os.path.join(self.checkpoint_manager.ckpt_dirpath, "checkpoint_%d.pth" % (epoch))
