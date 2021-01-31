@@ -43,9 +43,6 @@ ECOMMERCE_PARAMS = defaultdict(
 CONTRASTIVE_PARAMS = defaultdict(
     do_contrastive=True,
 )
-EXTRA_CONTRASTIVE_PARAMS = defaultdict(
-    do_extra_contrastive=True,
-)
 AUGMENT_PARAMS = defaultdict(
     do_augment_response_selection=True,
 )
@@ -96,15 +93,12 @@ BASE_PARAMS = defaultdict(
     do_contrastive=False,  # True for contrastive learning
     use_batch_negative=False,
     do_augment_response_selection=False,
-    do_hinge_loss=False,
     use_soft_logits=False,  # cl loss with softmax weight
     curriculum_learning=False,
-    do_extra_contrastive=False,
 
     max_sequence_len=512,
     res_sel_loss_ratio=1.0,
     cl_loss_ratio=1.0,
-    hinge_loss_ratio=1.0,
     projection_dim=256,
     max_utt_len=5,  # ubuntu : 5
     bert_freeze_layer=6,

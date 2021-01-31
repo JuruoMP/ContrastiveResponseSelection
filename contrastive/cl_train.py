@@ -13,7 +13,7 @@ from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
 
 from contrastive.cl_evaluation import ContrastiveEvaluation
-from data.contrastive_dataset_v3 import ContrastiveResponseSelectionDataset
+from data.contrastive_dataset_v4 import ContrastiveResponseSelectionDataset
 from models import Model
 from models.utils.checkpointing import CheckpointManager, load_checkpoint
 import global_variables
@@ -161,7 +161,7 @@ class ContrastiveResponseSelection(object):
                 buffer_batch = batch
                 with amp.autocast():
                     _, losses = self.model(buffer_batch)
-                res_sel_loss, contrastive_loss, hinge_loss = losses
+                res_sel_loss, contrastive_loss = losses
                 if res_sel_loss is not None:
                     res_sel_loss = self.hparams.res_sel_loss_ratio * res_sel_loss.mean()
                     accu_res_sel_loss += res_sel_loss.item()
@@ -173,13 +173,6 @@ class ContrastiveResponseSelection(object):
                     accu_cl_loss += cl_loss.item()
                     cl_loss = self.scaler.scale(cl_loss)
                     loss += cl_loss
-
-                if self.hparams.do_hinge_loss:
-                    hinge_loss = torch.stack(hinge_loss, dim=0).view(-1)
-                    hinge_loss = self.hparams.hinge_loss_ratio * hinge_loss.mean()
-                    accu_hinge_loss += hinge_loss.item()
-                    hinge_loss = self.scaler.scale(hinge_loss)
-                    loss += hinge_loss
 
                 loss.backward()
                 accu_loss += loss.item()

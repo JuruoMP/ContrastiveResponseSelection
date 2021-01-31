@@ -121,7 +121,6 @@ class DynamicNTXentLoss(ConditionalNTXentLoss):
             batch_soft_logits = [None for _ in range(len(zis_list))]
 
         losses = []
-        hinge_losses = []
         for zis, zjs, soft_logits in zip(zis_list, zjs_list, batch_soft_logits):
             representations = torch.cat([zjs, zis], dim=0)
 
@@ -159,9 +158,4 @@ class DynamicNTXentLoss(ConditionalNTXentLoss):
                 raise Exception('Invalid soft logits')
             losses.append(example_loss)
 
-            probs = torch.exp(logits) / torch.exp(logits).sum(dim=1, keepdim=True)
-            hinge_loss = torch.clamp(0.0 + probs[:, 0] - 1, min=0).mean() + \
-                         torch.clamp(1 + probs[:, 1:] - 1, min=0).mean()
-            hinge_losses.append(hinge_loss)
-
-        return losses, hinge_losses
+        return losses

@@ -4,10 +4,7 @@ import torch
 import torch.nn as nn
 from torch.cuda import amp
 
-from models.bert_insertion import BertInsertion
-from models.bert_deletion import BertDeletion
-from models.bert_search import BertSearch
-from models.contrastive_loss import NTXentLoss, ConditionalNTXentLoss, DynamicNTXentLoss
+from models.contrastive_loss import NTXentLoss, DynamicNTXentLoss
 import global_variables
 
 
@@ -57,7 +54,7 @@ class BertCls(nn.Module):
 
     @amp.autocast()
     def forward(self, batch_data):
-        contrastive_loss, hinge_loss = None, None
+        contrastive_loss, hinge_loss = [], None
 
         batch = batch_data['original']
         outputs = self._model(
@@ -74,7 +71,9 @@ class BertCls(nn.Module):
         res_sel_loss = res_sel_losses.masked_fill(mask, 0).mean()
 
         if self.hparams.do_contrastive and self.training:
-            if random.random() > 0.2 * global_variables.epoch:  # 0.5:
+            do_origin_contras = True if random.random() > 0.1 * global_variables.epoch else False
+            do_extra_contras = not do_origin_contras
+            if do_origin_contras:
                 batch_aug = batch_data['augment']
                 outputs_aug = self._model(
                     batch_aug["res_sel"]["anno_sent"],
@@ -102,8 +101,8 @@ class BertCls(nn.Module):
                         batch_soft_logits = [torch.cat((x, y), dim=0) for x, y in zip(soft_logits, soft_logits_aug)]
                     else:
                         raise Exception('Invalid soft logits')
-                contrastive_loss, hinge_loss = self._nt_xent_criterion(z, z_aug, batch_soft_logits=batch_soft_logits)
-            else:
+                contrastive_loss += self._nt_xent_criterion(z, z_aug, batch_soft_logits=batch_soft_logits)
+            if do_extra_contras:
                 batch_contras = batch_data['contras']
                 outputs_contras = self._model(
                     batch_contras["res_sel"]["anno_sent"],
@@ -122,6 +121,6 @@ class BertCls(nn.Module):
                 bert_outputs_contras_aug = outputs_contras_aug[0]
                 cls_logits_contras_aug = bert_outputs_contras_aug[:, 0, :]
                 z_contras_aug = self._projection(cls_logits_contras_aug)
-                contrastive_loss, hinge_loss = self._nt_xent_criterion(z_contras, z_contras_aug)
+                contrastive_loss += self._nt_xent_criterion(z_contras, z_contras_aug)
 
-        return logits, (res_sel_loss, contrastive_loss, hinge_loss)
+        return logits, (res_sel_loss, contrastive_loss)
