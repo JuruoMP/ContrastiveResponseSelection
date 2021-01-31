@@ -54,8 +54,6 @@ class BertCls(nn.Module):
 
     @amp.autocast()
     def forward(self, batch_data):
-        contrastive_loss, hinge_loss = [], None
-
         batch = batch_data['original']
         outputs = self._model(
             batch["res_sel"]["anno_sent"],
@@ -66,10 +64,13 @@ class BertCls(nn.Module):
         cls_logits = bert_outputs[:, 0, :]  # bs, bert_output_size
         logits = self._classification(cls_logits)  # bs, 1
         logits = logits.squeeze(-1)
-        res_sel_losses = self._criterion(logits, batch["res_sel"]["label"].float())
-        mask = batch["res_sel"]["label"] == -1
-        res_sel_loss = res_sel_losses.masked_fill(mask, 0).mean()
+        res_sel_loss = torch.Tensor([0]).to(logits.device)
+        if self.hparams.do_response_selection:
+            res_sel_losses = self._criterion(logits, batch["res_sel"]["label"].float())
+            mask = batch["res_sel"]["label"] == -1
+            res_sel_loss = res_sel_losses.masked_fill(mask, 0).mean()
 
+        contrastive_loss = []
         if self.hparams.do_contrastive and self.training:
             do_origin_contras = True if random.random() > 0.1 * global_variables.epoch else False
             do_extra_contras = not do_origin_contras
@@ -89,18 +90,6 @@ class BertCls(nn.Module):
                 logits_aug = logits_aug.squeeze(-1)
                 if self.hparams.do_augment_response_selection:
                     res_sel_loss = (res_sel_loss + self._criterion(logits_aug, batch_aug["res_sel"]["label"])) / 2
-
-                batch_soft_logits = None
-                if self.hparams.use_soft_logits:
-                    soft_logits, soft_logits_aug = batch['res_sel']['soft_logits'], batch_aug['res_sel']['soft_logits']  # n_example, n_example
-                    if len(soft_logits.size()) == 1:
-                        batch_soft_logits = torch.stack((soft_logits, soft_logits_aug), dim=1).view(-1, 4)  # n_query * 4
-                    elif len(soft_logits.size()) == 2:
-                        soft_logits = soft_logits.split(2, dim=0)
-                        soft_logits_aug = soft_logits_aug.split(2, dim=0)
-                        batch_soft_logits = [torch.cat((x, y), dim=0) for x, y in zip(soft_logits, soft_logits_aug)]
-                    else:
-                        raise Exception('Invalid soft logits')
                 contrastive_loss += self._nt_xent_criterion(z, z_aug, batch_soft_logits=batch_soft_logits)
             if do_extra_contras:
                 batch_contras = batch_data['contras']
@@ -122,5 +111,12 @@ class BertCls(nn.Module):
                 cls_logits_contras_aug = bert_outputs_contras_aug[:, 0, :]
                 z_contras_aug = self._projection(cls_logits_contras_aug)
                 contrastive_loss += self._nt_xent_criterion(z_contras, z_contras_aug)
+                if False:  # train contras example with response selection loss
+                    logits_contras = self._classification(cls_logits_contras)  # bs, 1
+                    logits_contras = logits_contras.squeeze(-1)
+                    res_sel_losses_contras = self._criterion(logits_contras, batch_contras["res_sel"]["label"].float())
+                    mask = batch_contras["res_sel"]["label"] == -1
+                    res_sel_loss_contras = res_sel_losses_contras.masked_fill(mask, 0).mean()
+                    res_sel_loss = (res_sel_loss + res_sel_loss_contras) / 2
 
         return logits, (res_sel_loss, contrastive_loss)
