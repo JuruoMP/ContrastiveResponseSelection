@@ -57,7 +57,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
 
                         self.input_examples.append(example)
 
-                        if self.split != 'train' and len(self.input_examples) > 100000: break
+                        if self.split != 'train' and len(self.input_examples) >= 100000: break
                         if len(self.input_examples) % 100000 == 0:
                             print("%d examples has been loaded!" % len(self.input_examples))
                             if self.hparams.pca_visualization:
