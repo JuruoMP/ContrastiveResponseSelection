@@ -65,14 +65,14 @@ class BertCls(nn.Module):
         logits = self._classification(cls_logits)  # bs, 1
         logits = logits.squeeze(-1)
         res_sel_loss = torch.Tensor([0]).to(logits.device)
-        if self.hparams.do_response_selection:
+        if False: #self.hparams.do_response_selection:
             res_sel_losses = self._criterion(logits, batch["res_sel"]["label"].float())
             mask = batch["res_sel"]["label"] == -1
             res_sel_loss = res_sel_losses.masked_fill(mask, 0).mean()
 
         contrastive_loss = []
         if self.hparams.do_contrastive and self.training:
-            do_origin_contras = True if random.random() > 0.1 * global_variables.epoch else False
+            do_origin_contras = False #True if random.random() > 0.1 * global_variables.epoch else False
             do_extra_contras = not do_origin_contras
             if do_origin_contras:
                 batch_aug = batch_data['augment']
@@ -90,7 +90,7 @@ class BertCls(nn.Module):
                 logits_aug = logits_aug.squeeze(-1)
                 if self.hparams.do_augment_response_selection:
                     res_sel_loss = (res_sel_loss + self._criterion(logits_aug, batch_aug["res_sel"]["label"])) / 2
-                contrastive_loss += self._nt_xent_criterion(z, z_aug, batch_soft_logits=batch_soft_logits)
+                contrastive_loss += self._nt_xent_criterion(z, z_aug)
             if do_extra_contras:
                 batch_contras = batch_data['contras']
                 outputs_contras = self._model(
@@ -111,12 +111,27 @@ class BertCls(nn.Module):
                 cls_logits_contras_aug = bert_outputs_contras_aug[:, 0, :]
                 z_contras_aug = self._projection(cls_logits_contras_aug)
                 contrastive_loss += self._nt_xent_criterion(z_contras, z_contras_aug)
-                if False:  # train contras example with response selection loss
+                if True:  # train contras example with response selection loss
                     logits_contras = self._classification(cls_logits_contras)  # bs, 1
                     logits_contras = logits_contras.squeeze(-1)
                     res_sel_losses_contras = self._criterion(logits_contras, batch_contras["res_sel"]["label"].float())
                     mask = batch_contras["res_sel"]["label"] == -1
                     res_sel_loss_contras = res_sel_losses_contras.masked_fill(mask, 0).mean()
-                    res_sel_loss = (res_sel_loss + res_sel_loss_contras) / 2
+
+                    batch_sample = batch_data['sample']
+                    outputs_sample = self._model(
+                        batch_sample["res_sel"]["anno_sent"],
+                        token_type_ids=batch_sample["res_sel"]["segment_ids"],
+                        attention_mask=batch_sample["res_sel"]["attention_mask"]
+                    )
+                    bert_outputs_sample = outputs_sample[0]
+                    cls_logits_sample = bert_outputs_sample[:, 0, :]  # bs, bert_output_size
+                    logits_sample = self._classification(cls_logits_sample)  # bs, 1
+                    logits_sample = logits_sample.squeeze(-1)
+                    res_sel_losses_sample = self._criterion(logits_sample, batch_sample["res_sel"]["label"].float())
+                    mask = batch_sample["res_sel"]["label"] == -1
+                    res_sel_losses_sample = res_sel_losses_sample.masked_fill(mask, 0).mean()
+                    # res_sel_loss = torch.stack((res_sel_loss, res_sel_loss_contras, res_sel_losses_sample)).mean()
+                    res_sel_loss = torch.stack((res_sel_loss_contras, res_sel_losses_sample)).mean()
 
         return logits, (res_sel_loss, contrastive_loss)

@@ -149,8 +149,9 @@ class ContrastiveResponseSelectionDataset(Dataset):
             dialogue = contrastive_positive_example.utterances + [contrastive_positive_example.response]
             n_context_turns = len(dialogue)
             if n_context_turns <= 2:
-                st_turn, ed_turn = 0, n_context_turns - 1
+                st_turn, ed_turn = 0, n_context_turns - 2
                 positive_response = dialogue[-1]
+                less_positive_response = dialogue[0]
                 negative_response = random.sample(self.input_examples, 1)[0][0].response
             else:
                 n_new_context_turns = random.randint(1, n_context_turns - 2)
@@ -158,33 +159,46 @@ class ContrastiveResponseSelectionDataset(Dataset):
                 ed_turn = st_turn + n_new_context_turns - 1
                 response_candidates = (set(range(0, st_turn)) | set(range(ed_turn + 2, n_context_turns)))
                 positive_response = dialogue[ed_turn + 1]
-                negative_response = dialogue[random.sample(response_candidates, 1)[0]]
+                less_positive_response = dialogue[random.sample(response_candidates, 1)[0]]
+                negative_response = random.sample(self.input_examples, 1)[0][0].response
             positive_example_contras = InputExamples(
                 utterances=dialogue[st_turn:ed_turn + 1], response=positive_response, label=1,
                 seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(positive_response))
+            )
+            less_positive_example_contras = InputExamples(
+                utterances=dialogue[st_turn:ed_turn + 1], response=less_positive_response, label=0,
+                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(less_positive_response))
             )
             negative_example_contras = InputExamples(
                 utterances=dialogue[st_turn:ed_turn + 1], response=negative_response, label=0,
                 seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(negative_response))
             )
             positive_response_aug = self._nlp_augment(positive_response)
+            less_positive_response_aug = self._nlp_augment(less_positive_response)
             negative_response_aug = self._nlp_augment(negative_response)
             positive_example_contras_aug = InputExamples(
                 utterances=dialogue[st_turn:ed_turn + 1], response=positive_response_aug, label=-1,
                 seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(positive_response_aug))
+            )
+            less_positive_example_contras_aug = InputExamples(
+                utterances=dialogue[st_turn:ed_turn + 1], response=less_positive_response_aug, label=-1,
+                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(less_positive_response_aug))
             )
             negative_example_contras_aug = InputExamples(
                 utterances=dialogue[st_turn:ed_turn + 1], response=negative_response_aug, label=-1,
                 seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(negative_response_aug))
             )
             positive_feature_contras = self._example_to_feature(index, positive_example_contras)
+            less_positive_feature_contras = self._example_to_feature(index, less_positive_example_contras)
             negative_feature_contras = self._example_to_feature(index, negative_example_contras)
             positive_feature_contras_aug = self._example_to_feature(index, positive_example_contras_aug)
+            less_positive_feature_contras_aug = self._example_to_feature(index, less_positive_example_contras_aug)
             negative_feature_contras_aug = self._example_to_feature(index, negative_example_contras_aug)
 
             features.update({
                 'contras': (positive_feature_contras, negative_feature_contras),
                 'contras_aug': (positive_feature_contras_aug, negative_feature_contras_aug),
+                'sample': (less_positive_feature_contras, less_positive_feature_contras_aug),
             })
 
         else:
@@ -370,7 +384,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
             for key in batch[0]:
                 feature_dict[key] = []
             for example in batch:
-                for group in ('original', 'augment', 'contras', 'contras_aug'):
+                for group in ('original', 'augment', 'contras', 'contras_aug', 'sample'):
                     if group not in example:
                         continue
                     pos_example, neg_example = example[group]
