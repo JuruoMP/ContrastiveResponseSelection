@@ -75,8 +75,9 @@ class BertCls(nn.Module):
             res_sel_loss = res_sel_losses.masked_fill(mask, 0).mean()
             # 3 class classification
             logits_three_class = torch.log_softmax(self._classification2(cls_logits), dim=-1)
-            classification_loss = nn.functional.nll_loss(logits_three_class, batch["res_sel"]['label2'])
-            res_sel_loss = res_sel_loss + classification_loss
+            if 'label2' in batch["res_sel"]:
+                classification_loss = nn.functional.nll_loss(logits_three_class, batch["res_sel"]['label2'])
+                res_sel_loss = res_sel_loss + classification_loss
 
         contrastive_loss = []
         if self.hparams.do_contrastive and self.training:
