@@ -41,6 +41,11 @@ class BertCls(nn.Module):
             nn.Linear(self.hparams.bert_hidden_dim, 1)
         )
 
+        self._classification2 = nn.Sequential(
+            nn.Dropout(p=1 - self.hparams.dropout_keep_prob),
+            nn.Linear(self.hparams.bert_hidden_dim, 3)
+        )
+
         self._projection = nn.Sequential(
             nn.Linear(self.hparams.bert_hidden_dim, self.hparams.projection_dim),
             nn.ReLU(),
@@ -68,6 +73,10 @@ class BertCls(nn.Module):
             res_sel_losses = self._criterion(logits, batch["res_sel"]["label"].float())
             mask = batch["res_sel"]["label"] == -1
             res_sel_loss = res_sel_losses.masked_fill(mask, 0).mean()
+            # 3 class classification
+            logits_three_class = torch.log_softmax(self._classification2(cls_logits), dim=-1)
+            classification_loss = nn.functional.nll_loss(logits_three_class, batch["res_sel"]['label2'])
+            res_sel_loss = res_sel_loss + classification_loss
 
         contrastive_loss = []
         if self.hparams.do_contrastive and self.training:

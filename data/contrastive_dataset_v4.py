@@ -123,6 +123,8 @@ class ContrastiveResponseSelectionDataset(Dataset):
         if self.split == 'train':
             positive_example, negative_example = self.input_examples[index]
             p_context_augment = global_variables.epoch / 10
+            positive_example.label2 = 0
+            negative_example.label2 = 2
 
             pos_response_aug, neg_response_aug = self._nlp_augment(positive_example.response), self._nlp_augment(negative_example.response)
             # all_responses = [positive_example.response, pos_response_aug, negative_example.response, neg_response_aug]
@@ -164,30 +166,30 @@ class ContrastiveResponseSelectionDataset(Dataset):
                 negative_response = random.sample(self.input_examples, 1)[0][0].response
             positive_example_contras = InputExamples(
                 utterances=dialogue[st_turn:ed_turn + 1], response=positive_response, label=1,
-                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(positive_response))
+                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(positive_response)), label2=0
             )
             less_positive_example_contras = InputExamples(
                 utterances=dialogue[st_turn:ed_turn + 1], response=less_positive_response, label=0,
-                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(less_positive_response))
+                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(less_positive_response)), label2=1
             )
             negative_example_contras = InputExamples(
                 utterances=dialogue[st_turn:ed_turn + 1], response=negative_response, label=0,
-                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(negative_response))
+                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(negative_response)), label2=2
             )
             positive_response_aug = self._nlp_augment(positive_response)
             less_positive_response_aug = self._nlp_augment(less_positive_response)
             negative_response_aug = self._nlp_augment(negative_response)
             positive_example_contras_aug = InputExamples(
                 utterances=dialogue[st_turn:ed_turn + 1], response=positive_response_aug, label=-1,
-                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(positive_response_aug))
+                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(positive_response_aug)), label2=0
             )
             less_positive_example_contras_aug = InputExamples(
                 utterances=dialogue[st_turn:ed_turn + 1], response=less_positive_response_aug, label=-1,
-                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(less_positive_response_aug))
+                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(less_positive_response_aug)), label2=1
             )
             negative_example_contras_aug = InputExamples(
                 utterances=dialogue[st_turn:ed_turn + 1], response=negative_response_aug, label=-1,
-                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(negative_response_aug))
+                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(negative_response_aug)), label2=2
             )
             positive_feature_contras = self._example_to_feature(index, positive_example_contras)
             less_positive_feature_contras = self._example_to_feature(index, less_positive_example_contras)
@@ -196,8 +198,9 @@ class ContrastiveResponseSelectionDataset(Dataset):
             less_positive_feature_contras_aug = self._example_to_feature(index, less_positive_example_contras_aug)
             negative_feature_contras_aug = self._example_to_feature(index, negative_example_contras_aug)
 
+            new_negative_feature = negative_feature_contras if random.random() < 0.5 else less_positive_feature_contras
             features.update({
-                'original': (positive_feature_contras, negative_feature_contras),
+                'original': (positive_feature_contras, new_negative_feature),
                 'contras': (positive_feature_contras, negative_feature_contras),
                 'contras_aug': (positive_feature_contras_aug, negative_feature_contras_aug),
                 'sample': (less_positive_feature_contras, less_positive_feature_contras_aug),
@@ -249,38 +252,9 @@ class ContrastiveResponseSelectionDataset(Dataset):
         current_feature["res_sel"]["attention_mask"] = torch.tensor(attention_mask).long()
         current_feature["res_sel"]["eot_pos"] = torch.tensor(eot_pos).long()
         current_feature["res_sel"]["label"] = torch.tensor(example.label)
-        if hasattr(example, 'soft_logits'):
-            current_feature["res_sel"]["soft_logits"] = torch.tensor(example.soft_logits).float()
+        current_feature["res_sel"]["label2"] = torch.tensor(example.label2)
 
         return current_feature
-
-    def _single_turn_processing(self, featrue: dict):
-        max_seq_len = self.hparams.max_sequence_len
-        if self.hparams.do_sent_insertion:
-            featrue["ins"] = dict()
-            featrue["ins"]["anno_sent"] = torch.tensor([0] * max_seq_len).long()
-            featrue["ins"]["segment_ids"] = torch.tensor([0] * max_seq_len).long()
-            featrue["ins"]["attention_mask"] = torch.tensor([0] * max_seq_len).long()
-            featrue["ins"]["ins_pos"] = torch.tensor([0] * max_seq_len).long()
-            featrue["ins"]["label"] = torch.tensor(-1).long()
-
-        if self.hparams.do_sent_deletion:
-            featrue["del"] = dict()
-            featrue["del"]["anno_sent"] = torch.tensor([0] * max_seq_len).long()
-            featrue["del"]["segment_ids"] = torch.tensor([0] * max_seq_len).long()
-            featrue["del"]["attention_mask"] = torch.tensor([0] * max_seq_len).long()
-            featrue["del"]["del_pos"] = torch.tensor([0] * max_seq_len).long()
-            featrue["del"]["label"] = torch.tensor(-1).long()
-
-        if self.hparams.do_sent_search:
-            featrue["srch"] = dict()
-            featrue["srch"]["anno_sent"] = torch.tensor([0] * max_seq_len).long()
-            featrue["srch"]["segment_ids"] = torch.tensor([0] * max_seq_len).long()
-            featrue["srch"]["attention_mask"] = torch.tensor([0] * max_seq_len).long()
-            featrue["srch"]["srch_pos"] = torch.tensor([0] * max_seq_len).long()
-            featrue["srch"]["label"] = torch.tensor(-1).long()
-
-        return featrue
 
     def _annotate_sentence(self, example):
 
