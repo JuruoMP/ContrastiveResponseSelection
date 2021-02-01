@@ -252,7 +252,8 @@ class ContrastiveResponseSelectionDataset(Dataset):
         current_feature["res_sel"]["attention_mask"] = torch.tensor(attention_mask).long()
         current_feature["res_sel"]["eot_pos"] = torch.tensor(eot_pos).long()
         current_feature["res_sel"]["label"] = torch.tensor(example.label)
-        current_feature["res_sel"]["label2"] = torch.tensor(example.label2)
+        if hasattr(example, 'label2'):
+            current_feature["res_sel"]["label2"] = torch.tensor(example.label2)
 
         return current_feature
 
