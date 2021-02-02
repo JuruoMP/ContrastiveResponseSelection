@@ -1,4 +1,4 @@
-from models.bert_cls_cl_v4 import BertCls
+from models.bert_cls_cl_v5 import BertCls
 from models.bert_eot import BertEOT
 from models.bert_insertion import BertInsertion
 

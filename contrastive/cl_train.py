@@ -165,11 +165,9 @@ class ContrastiveResponseSelection(object):
                 if res_sel_loss is not None:
                     res_sel_loss = self.hparams.res_sel_loss_ratio * res_sel_loss.mean()
                     accu_res_sel_loss += res_sel_loss.item()
-
                 loss = self.scaler.scale(res_sel_loss)
                 if self.hparams.do_contrastive:
-                    cl_loss = torch.stack(contrastive_loss, dim=0).view(-1)
-                    cl_loss = self.cl_loss_ratio * cl_loss.mean()
+                    cl_loss = self.cl_loss_ratio * contrastive_loss.mean()
                     accu_cl_loss += cl_loss.item()
                     cl_loss = self.scaler.scale(cl_loss)
                     loss += cl_loss

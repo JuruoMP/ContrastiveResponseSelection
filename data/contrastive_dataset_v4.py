@@ -198,9 +198,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
             less_positive_feature_contras_aug = self._example_to_feature(index, less_positive_example_contras_aug)
             negative_feature_contras_aug = self._example_to_feature(index, negative_example_contras_aug)
 
-            new_negative_feature = negative_feature_contras if random.random() < 0.5 else less_positive_feature_contras
             features.update({
-                'original': (positive_feature_contras, new_negative_feature),
                 'contras': (positive_feature_contras, negative_feature_contras),
                 'contras_aug': (positive_feature_contras_aug, negative_feature_contras_aug),
                 'sample': (less_positive_feature_contras, less_positive_feature_contras_aug),
