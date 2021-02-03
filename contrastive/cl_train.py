@@ -85,7 +85,7 @@ class ContrastiveResponseSelection(object):
                                    eps=self.hparams.adam_epsilon)
             self.scheduler = get_linear_schedule_with_warmup(
                 self.optimizer, num_warmup_steps=self.hparams.warmup_steps,
-                num_training_steps=self.iterations * self.hparams.num_epochs)
+                num_training_steps=self.iterations * self.hparams.num_epochs * 10000)
         self.scaler = amp.GradScaler()
         self.cl_loss_ratio = self.hparams.cl_loss_ratio
 
