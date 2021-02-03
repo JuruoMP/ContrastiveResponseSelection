@@ -13,7 +13,7 @@ from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
 
 from contrastive.cl_evaluation import ContrastiveEvaluation
-from data.contrastive_dataset_test import ContrastiveResponseSelectionDataset
+from data.contrastive_dataset_v4 import ContrastiveResponseSelectionDataset
 from models import Model
 from models.utils.checkpointing import CheckpointManager, load_checkpoint
 import global_variables
@@ -85,7 +85,7 @@ class ContrastiveResponseSelection(object):
                                    eps=self.hparams.adam_epsilon)
             self.scheduler = get_linear_schedule_with_warmup(
                 self.optimizer, num_warmup_steps=self.hparams.warmup_steps,
-                num_training_steps=self.iterations * self.hparams.num_epochs * 10000)
+                num_training_steps=self.iterations * self.hparams.num_epochs)
         self.scaler = amp.GradScaler()
         self.cl_loss_ratio = self.hparams.cl_loss_ratio
 

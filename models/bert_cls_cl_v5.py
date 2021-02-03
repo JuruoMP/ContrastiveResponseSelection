@@ -90,11 +90,11 @@ class BertCls(nn.Module):
                 return cls_logits
 
         if self.training:  # training
-            original_response_selection, original_contrastive = False, False
-            new_response_selection, new_contrastive = True, True
-            less_positive_res_sel = True
-            three_class_classification = True
-            supervised_contrastive = True
+            original_response_selection, original_contrastive = True, True
+            new_response_selection, new_contrastive = False, False
+            less_positive_res_sel = False
+            three_class_classification = False
+            supervised_contrastive = False
         else:  # evaluation
             original_response_selection, original_contrastive = True, False
             new_response_selection, new_contrastive = False, False
