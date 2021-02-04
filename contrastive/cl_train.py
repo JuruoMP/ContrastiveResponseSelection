@@ -13,7 +13,7 @@ from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
 
 from contrastive.cl_evaluation import ContrastiveEvaluation
-from data.contrastive_dataset_v4 import ContrastiveResponseSelectionDataset
+from data.contrastive_dataset_v6 import ContrastiveResponseSelectionDataset
 from models import Model
 from models.utils.checkpointing import CheckpointManager, load_checkpoint
 import global_variables
@@ -140,7 +140,7 @@ class ContrastiveResponseSelection(object):
 
         train_begin = datetime.utcnow()  # New
         global_iteration_step = 0
-        accu_loss, accu_res_sel_loss, accu_cl_loss = 0, 0, 0
+        accu_loss, accu_res_sel_loss, accu_cl_loss, accu_ins_loss = 0, 0, 0, 0
         accu_cnt = 0
 
         best_recall_list, best_model_path = [0], ''
@@ -161,7 +161,7 @@ class ContrastiveResponseSelection(object):
                 buffer_batch = batch
                 with amp.autocast():
                     _, losses = self.model(buffer_batch)
-                res_sel_loss, contrastive_loss = losses
+                res_sel_loss, contrastive_loss, ins_loss = losses
                 if res_sel_loss is not None:
                     res_sel_loss = self.hparams.res_sel_loss_ratio * res_sel_loss.mean()
                     accu_res_sel_loss += res_sel_loss.item()
@@ -171,6 +171,10 @@ class ContrastiveResponseSelection(object):
                     accu_cl_loss += cl_loss.item()
                     cl_loss = self.scaler.scale(cl_loss)
                     loss += cl_loss
+                if self.hparams.do_sent_insertion:
+                    accu_ins_loss += ins_loss.item()
+                    ins_loss = self.scaler.scale(ins_loss)
+                    loss += ins_loss
 
                 loss.backward()
                 accu_loss += loss.item()
@@ -202,17 +206,17 @@ class ContrastiveResponseSelection(object):
                     #     accu_res_sel_loss / accu_cnt, accu_ins_loss / accu_cnt, accu_del_loss / accu_cnt,
                     #     accu_srch_loss / accu_cnt,
                     #     self.optimizer.param_groups[0]['lr'])
-                    description = "[Epoch:{:2d}][Iter:{:3d}][Loss: {:.2e}][Res/CL: {:.2e}/{:.2e}][lr: {:.2e}]".format(
+                    description = "[Epoch:{:2d}][Iter:{:3d}][Loss: {:.2e}][Res/CL/Ins: {:.2e}/{:.2e}/{:.2e}][lr: {:.2e}]".format(
                         epoch,
                         global_iteration_step, accu_loss / accu_cnt, accu_res_sel_loss / accu_cnt,
-                        accu_cl_loss / accu_cnt,
+                        accu_cl_loss / accu_cnt, accu_ins_loss / accu_cnt,
                         self.optimizer.param_groups[0]['lr'])
                     tqdm_batch_iterator.set_description(description)
 
                     # tensorboard
                     if global_iteration_step % self.hparams.tensorboard_step == 0:
                         self._logger.info(description)
-                        accu_loss, accu_cl_loss, accu_res_sel_loss, accu_cnt = 0, 0, 0, 0
+                        accu_loss, accu_cl_loss, accu_res_sel_loss, accu_ins_loss, accu_cnt = 0, 0, 0, 0, 0
 
                 # if batch_idx == len(self.train_dataloader) // 2:
                 #     recall_list = evaluation.run_evaluate(self.model)
