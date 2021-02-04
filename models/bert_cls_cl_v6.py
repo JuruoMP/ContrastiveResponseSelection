@@ -18,6 +18,7 @@ class BertCls(nn.Module):
             os.path.join(self.hparams.bert_pretrained_dir, self.hparams.bert_pretrained,
                          "%s-config.json" % self.hparams.bert_pretrained),
         )
+        pretrained_config.output_hidden_states = True
         self._model = hparams.pretrained_model.from_pretrained(
             os.path.join(self.hparams.bert_pretrained_dir, self.hparams.bert_pretrained,
                          self.hparams.bert_checkpoint_path),
@@ -36,8 +37,7 @@ class BertCls(nn.Module):
             # bert_post already has [EOT]
             if self.hparams.do_sent_insertion:
                 num_new_tok += 1  # [INS]
-                if self.hparams.do_sent_insertion:
-                    self._bert_insertion = BertInsertion(hparams, self._model)
+                self._bert_insertion = BertInsertion(hparams, self._model)
 
         self._model.resize_token_embeddings(self._model.config.vocab_size + num_new_tok)  # [EOT]
 
@@ -80,20 +80,22 @@ class BertCls(nn.Module):
             'sample': None,
             'extra': None,
         }
-        def get_bert_output(name):
+        def get_bert_output(name, return_hidden=False):
             if bert_output_cache.get(name) is not None:
                 return bert_output_cache.get(name)
             else:
                 batch = batch_data[name]
-                outputs = self._model(
+                bert_outputs, _, hidden_states = self._model(
                     batch["res_sel"]["anno_sent"],
                     token_type_ids=batch["res_sel"]["segment_ids"],
                     attention_mask=batch["res_sel"]["attention_mask"]
                 )
-                bert_outputs = outputs[0]
                 cls_logits = bert_outputs[:, 0, :]  # bs, bert_output_size
                 bert_output_cache[name] = cls_logits
-                return cls_logits
+                if not return_hidden:
+                    return cls_logits
+                else:
+                    return cls_logits, hidden_states
 
         device = batch_data['original']['res_sel']['anno_sent'].device
         if self.training:  # training
