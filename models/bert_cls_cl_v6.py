@@ -31,7 +31,7 @@ class BertCls(nn.Module):
                 param.requires_grad = False
 
         num_new_tok = 0
-        if self.hparams.model_type.startswith("bert_base") or self.hparams.model_type.startswith("electra_base"):
+        if self.hparams.model_type.startswith("bert_base") or self.hparams.model_type.startswith("bert_post") or self.hparams.model_type.startswith("electra_base"):
             if self.hparams.do_eot:
                 num_new_tok += 1
             # bert_post already has [EOT]
