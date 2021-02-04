@@ -108,7 +108,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
         if self.hparams.do_eot:
             self._bert_tokenizer.add_tokens(["[EOT]"])
         if self.hparams.do_sent_insertion:
-            self._bert_tokenizer.add_tokens(["[INS]"])
+            self._bert_tokenizer.add_tokens(['[unused6]'])
 
     def __len__(self):
         return len(self.input_examples)
@@ -328,7 +328,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
                 example.utterances[utt_i] = utt[:int(self.hparams.max_sequence_len / 4)]
 
         target = []
-        dialog_context = ["[INS]"]
+        dialog_context = ['[unused6]']
         target_idx = random.sample(list(range(num_utterances)), 1)[0]
 
         target_left, target_right = 0, 0
@@ -337,7 +337,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
                 target_left = len(dialog_context) - 1
                 target = utt + ["[EOT]"]
                 continue
-            dialog_context.extend(utt + ["[EOT]"] + ["[INS]"])
+            dialog_context.extend(utt + ["[EOT]"] + ['[unused6]'])
 
         target_right = len(dialog_context) - target_left
         dialog_context, target, target_idx = self._insert_max_len_trim_seq(dialog_context, target, target_idx,
@@ -362,7 +362,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
         ins_pos = []
         ins_cnt = 0
         for tok_idx, tok in enumerate(dialog_target):
-            if tok == "[INS]":
+            if tok == '[unused6]':
                 ins_pos.append(1)
                 ins_cnt += 1
             else:
@@ -399,7 +399,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
         while len(dialog_context) + len(target) > self.hparams.max_sequence_len - 3:
             if len(dialog_context) > len(target):
                 if target_left > target_right:
-                    if dialog_context[0] in ["[INS]"]:
+                    if dialog_context[0] in ['[unused6]']:
                         target_idx -= 1
                     target_left -= 1
                     dialog_context.pop(0)  # from the left
