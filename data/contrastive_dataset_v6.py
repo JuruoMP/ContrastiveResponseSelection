@@ -108,7 +108,14 @@ class ContrastiveResponseSelectionDataset(Dataset):
         if self.hparams.do_eot:
             self._bert_tokenizer.add_tokens(["[EOT]"])
         if self.hparams.do_sent_insertion:
-            self._bert_tokenizer.add_tokens(['[unused6]'])
+            self.ins_token = '[unused6]'
+            self._bert_tokenizer.add_tokens([self.ins_token])
+        if self.hparams.do_sent_deletion:
+            self.del_token = '[unused7]'
+            self._bert_tokenizer.add_tokens([self.del_token])
+        if self.hparams.do_sent_search:
+            self.srch_token = '[unused8]'
+            self._bert_tokenizer.add_tokens([self.srch_token])
 
     def __len__(self):
         return len(self.input_examples)
@@ -205,17 +212,41 @@ class ContrastiveResponseSelectionDataset(Dataset):
                 'sample': (less_positive_feature_contras, less_positive_feature_contras_aug),
             })
 
-            extra_example = copy.deepcopy(positive_example)
-            extra_example.utterances.append(extra_example.response)
-            if self.hparams.do_sent_insertion and self.split == "train":
-                anno_sent, segment_ids, attention_mask, ins_pos, target_idx = self._insertion_annotate_sentence(extra_example)
-                current_feature = {'ins': dict()}
-                current_feature["ins"]["anno_sent"] = torch.tensor(anno_sent).long()
-                current_feature["ins"]["segment_ids"] = torch.tensor(segment_ids).long()
-                current_feature["ins"]["attention_mask"] = torch.tensor(attention_mask).long()
-                current_feature["ins"]["ins_pos"] = torch.tensor(ins_pos).long()
-                current_feature["ins"]["label"] = torch.tensor(target_idx).long()
-                features.update({'extra': current_feature})
+            if self.split == 'train' and (self.hparams.do_sent_insertion or self.hparams.do_sent_deletion or self.hparams.do_sent_search):
+                extra_example = copy.deepcopy(positive_example)
+                extra_example.utterances.append(extra_example.response)
+                current_feature = dict()
+                if self.hparams.do_sent_insertion:
+                    anno_sent, segment_ids, attention_mask, ins_pos, target_idx = self._insertion_annotate_sentence(extra_example)
+                    current_feature["ins"] = dict()
+                    current_feature["ins"]["anno_sent"] = torch.tensor(anno_sent).long()
+                    current_feature["ins"]["segment_ids"] = torch.tensor(segment_ids).long()
+                    current_feature["ins"]["attention_mask"] = torch.tensor(attention_mask).long()
+                    current_feature["ins"]["ins_pos"] = torch.tensor(ins_pos).long()
+                    current_feature["ins"]["label"] = torch.tensor(target_idx).long()
+                    features.update({'extra': current_feature})
+                if self.hparams.do_sent_deletion:
+                    while True:
+                        target_idx = random.sample(list(range(self.num_input_examples)), 1)[0]
+                        target_example = self.input_examples[target_idx][0]
+                        if target_idx != index and len(target_example.utterances) > 2:
+                            break
+                    anno_sent, segment_ids, attention_mask, del_pos, target_idx = self._deletion_annotate_sentence(
+                        extra_example, target_example)
+                    current_feature["del"] = dict()
+                    current_feature["del"]["anno_sent"] = torch.tensor(anno_sent).long()
+                    current_feature["del"]["segment_ids"] = torch.tensor(segment_ids).long()
+                    current_feature["del"]["attention_mask"] = torch.tensor(attention_mask).long()
+                    current_feature["del"]["del_pos"] = torch.tensor(del_pos).long()
+                    current_feature["del"]["label"] = torch.tensor(target_idx).long()
+                if self.hparams.do_sent_search:
+                    anno_sent, segment_ids, attention_mask, srch_pos, target_idx = self._search_annotate_sentence(extra_example)
+                    current_feature["srch"] = dict()
+                    current_feature["srch"]["anno_sent"] = torch.tensor(anno_sent).long()
+                    current_feature["srch"]["segment_ids"] = torch.tensor(segment_ids).long()
+                    current_feature["srch"]["attention_mask"] = torch.tensor(attention_mask).long()
+                    current_feature["srch"]["srch_pos"] = torch.tensor(srch_pos).long()
+                    current_feature["srch"]["label"] = torch.tensor(target_idx).long()
 
         else:
             features = [self._example_to_feature(index, example) for example in self.input_examples[index]]
@@ -328,7 +359,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
                 example.utterances[utt_i] = utt[:int(self.hparams.max_sequence_len / 4)]
 
         target = []
-        dialog_context = ['[unused6]']
+        dialog_context = [self.ins_token]
         target_idx = random.sample(list(range(num_utterances)), 1)[0]
 
         target_left, target_right = 0, 0
@@ -337,7 +368,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
                 target_left = len(dialog_context) - 1
                 target = utt + ["[EOT]"]
                 continue
-            dialog_context.extend(utt + ["[EOT]"] + ['[unused6]'])
+            dialog_context.extend(utt + ["[EOT]"] + [self.ins_token])
 
         target_right = len(dialog_context) - target_left
         dialog_context, target, target_idx = self._insert_max_len_trim_seq(dialog_context, target, target_idx,
@@ -362,7 +393,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
         ins_pos = []
         ins_cnt = 0
         for tok_idx, tok in enumerate(dialog_target):
-            if tok == '[unused6]':
+            if tok == self.ins_token:
                 ins_pos.append(1)
                 ins_cnt += 1
             else:
@@ -373,6 +404,144 @@ class ContrastiveResponseSelectionDataset(Dataset):
         anno_sent = self._bert_tokenizer.convert_tokens_to_ids(dialog_target)
 
         return anno_sent, segment_ids, attention_mask, ins_pos, target_idx
+
+    def _search_annotate_sentence(self, example):
+        """
+            Search
+        """
+        max_utt_len = self.hparams.max_utt_len
+
+        num_utterances = len(example.utterances)
+
+        if num_utterances > max_utt_len:
+            max_dialog_len_idx = random.sample(list(range(num_utterances - max_utt_len)), 1)[0]
+            example.utterances = example.utterances[max_dialog_len_idx:max_dialog_len_idx + max_utt_len]
+            num_utterances = len(example.utterances)
+
+        utt_len = 3  # cls sep sep
+        for utt_id, utt in enumerate(example.utterances):
+            if len(utt) > int(self.hparams.max_sequence_len / 4):
+                example.utterances[utt_id] = utt[:int(self.hparams.max_sequence_len / 4)]
+            utt_len += len(utt) + 2  # srch, eot
+            if utt_len > self.hparams.max_sequence_len:
+                example.utterances = example.utterances[:utt_id]
+                num_utterances = len(example.utterances)
+                break
+
+        target = example.utterances.pop() + ["[EOT]"]
+        num_utterances -= 1
+
+        random_utt_idx = list(range(num_utterances))
+        random.shuffle(random_utt_idx)
+
+        dialog_context = []
+        target_idx = 0
+        target_left = 0
+        for i, random_id in enumerate(random_utt_idx):
+            if random_id == num_utterances - 1:
+                target_idx = i
+                target_left = len(dialog_context)
+            dialog_context.extend(["[SRCH]"] + example.utterances[random_id] + ["[EOT]"])
+
+        target_right = len(dialog_context) - target_left
+        dialog_context, target, target_idx = self._insert_max_len_trim_seq(dialog_context, target, target_idx,
+                                                                           (target_left, target_right))
+
+        # dialog context
+        dialog_context = ["[CLS]"] + dialog_context + ["[SEP]"]
+        segment_ids = [0] * len(dialog_context)
+        attention_mask = [1] * len(dialog_context)
+
+        target += ["[SEP]"]
+        segment_ids.extend([1] * len(target))  # same utterance
+        attention_mask.extend([1] * len(target))
+
+        dialog_target = dialog_context + target
+
+        while len(dialog_target) < self.hparams.max_sequence_len:
+            dialog_target.append("[PAD]")
+            segment_ids.append(0)
+            attention_mask.append(0)
+
+        srch_pos = []
+        srch_cnt = 0
+        for tok_idx, tok in enumerate(dialog_target):
+            if tok == "[SRCH]":
+                srch_pos.append(1)
+                srch_cnt += 1
+            else:
+                srch_pos.append(0)
+
+        assert len(dialog_target) == len(segment_ids) == len(attention_mask)
+        assert len(dialog_target) <= self.hparams.max_sequence_len
+
+        anno_sent = self._bert_tokenizer.convert_tokens_to_ids(dialog_target)
+
+        return anno_sent, segment_ids, attention_mask, srch_pos, target_idx
+
+    def _deletion_annotate_sentence(self, curr_example, target_example):
+        max_utt_len = self.hparams.max_utt_len - 1
+
+        target_sentence = random.sample(target_example.utterances, 1)[0]
+
+        # TODO: current example
+        # current example -> deletion is included
+        num_utterances = len(curr_example.utterances)
+        if num_utterances > max_utt_len:
+            max_dialog_len_idx = random.sample(list(range(num_utterances - max_utt_len)), 1)[0]
+            curr_example.utterances = curr_example.utterances[max_dialog_len_idx:max_dialog_len_idx + max_utt_len]
+            num_utterances = max_utt_len
+
+        for utt_i, utt in enumerate(curr_example.utterances):
+            if len(utt) > int(self.hparams.max_sequence_len / 4):
+                curr_example.utterances[utt_i] = utt[:int(self.hparams.max_sequence_len / 4)]
+
+        curr_dialog_context = []
+        delete_idx = random.sample(list(range(num_utterances)), 1)[0]
+
+        delete_left = 0
+        for utt_i, utt in enumerate(curr_example.utterances):
+            if utt_i == delete_idx:
+                delete_left = len(curr_dialog_context)
+                curr_dialog_context.extend(["[DEL]"] + target_sentence + ["[EOT]"])
+                if len(curr_example.utterances) > max_utt_len:
+                    curr_example.utterances.pop()  # remove the last utterance
+            curr_dialog_context.extend(["[DEL]"] + utt + ["[EOT]"])
+
+        delete_right = len(curr_dialog_context) - delete_left
+
+        target_dialog_context = []
+        dialog_context, target_context, target_idx = \
+            self._delete_max_len_trim_seq(curr_dialog_context, target_dialog_context, delete_idx,
+                                          (delete_left, delete_right))
+
+        # dialog context
+        dialog_context = ["[CLS]"] + dialog_context + ["[SEP]"]
+        segment_ids = [0] * len(dialog_context)
+        attention_mask = [1] * len(dialog_context)
+
+        dialog_target = dialog_context
+
+        while len(dialog_target) < self.hparams.max_sequence_len:
+            dialog_target.append("[PAD]")
+            segment_ids.append(0)
+            attention_mask.append(0)
+
+        del_pos = []
+        del_cnt = 0
+        for tok_idx, tok in enumerate(dialog_target):
+            if tok == "[DEL]":
+                del_pos.append(1)
+                del_cnt += 1
+            else:
+                del_pos.append(0)
+
+        assert len(dialog_target) == len(segment_ids) == len(attention_mask)
+        assert len(dialog_target) <= self.hparams.max_sequence_len
+
+        anno_sent = self._bert_tokenizer.convert_tokens_to_ids(dialog_target)
+
+        return anno_sent, segment_ids, attention_mask, del_pos, target_idx
 
     def _delete_max_len_trim_seq(self, curr_dialog_context, target_dialog_context, target_idx, lengths):
         delete_left, delete_right = lengths
@@ -399,7 +568,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
         while len(dialog_context) + len(target) > self.hparams.max_sequence_len - 3:
             if len(dialog_context) > len(target):
                 if target_left > target_right:
-                    if dialog_context[0] in ['[unused6]']:
+                    if dialog_context[0] in [self.ins_token]:
                         target_idx -= 1
                     target_left -= 1
                     dialog_context.pop(0)  # from the left

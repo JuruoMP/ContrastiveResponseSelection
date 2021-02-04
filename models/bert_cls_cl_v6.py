@@ -3,10 +3,29 @@ import random
 import torch
 import torch.nn as nn
 from torch.cuda import amp
+import numpy as np
 
 from models.contrastive_loss import NTXentLoss, DynamicNTXentLoss, SupConLoss
 import global_variables
 from models.bert_insertion import BertInsertion
+from models.bert_deletion import BertDeletion
+from models.bert_search import BertSearch
+
+
+class SelfAttention(nn.Module):
+    def __init__(self, d_hid, dropout=0.):
+        super().__init__()
+        self.scorer = nn.Linear(d_hid, 1)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, input_seq, mask):
+        batch_size, seq_len, feature_dim = input_seq.size()
+        input_seq = self.dropout(input_seq)
+        scores = self.scorer(input_seq.contiguous().view(-1, feature_dim)).view(batch_size, seq_len)
+        scores = scores.masked_fill((1 - mask).bool(), -np.inf)
+        scores = torch.softmax(scores, dim=1)
+        context = scores.unsqueeze(2).expand_as(input_seq).mul(input_seq).sum(1)
+        return context
 
 
 class BertCls(nn.Module):
@@ -40,6 +59,10 @@ class BertCls(nn.Module):
 
         if self.hparams.do_sent_insertion:
             self._bert_insertion = BertInsertion(hparams, self._model)
+        if self.hparams.do_sent_deletion:
+            self._bert_deletion = BertDeletion(hparams, self._model)
+        if self.hparams.do_sent_search:
+            self._bert_search = BertSearch(hparams, self._model)
 
         self._classification = nn.Sequential(
             nn.Dropout(p=1 - self.hparams.dropout_keep_prob),
@@ -80,7 +103,7 @@ class BertCls(nn.Module):
             'sample': None,
             'extra': None,
         }
-        def get_bert_output(name, return_hidden=False):
+        def get_bert_output(name, return_hidden=False, return_layer=False):
             if bert_output_cache.get(name) is not None:
                 return bert_output_cache.get(name)
             else:
@@ -92,12 +115,15 @@ class BertCls(nn.Module):
                 )
                 cls_logits = bert_outputs[:, 0, :]  # bs, bert_output_size
                 bert_output_cache[name] = cls_logits
-                if not return_hidden:
-                    return cls_logits
-                else:
-                    return cls_logits, [x[:, 0, :] for x in hidden_states]
+                ret = (cls_logits,)
+                if return_hidden:
+                    ret = ret + ([x[:, 0, :] for x in hidden_states],)
+                if return_layer:
+                    ret = ret + (bert_outputs,)
+                return ret
 
         device = batch_data['original']['res_sel']['anno_sent'].device
+        use_all_bert_output = True
         if self.training:  # training
             original_response_selection, original_contrastive = True, True
             new_response_selection, new_contrastive = False, False
@@ -110,22 +136,25 @@ class BertCls(nn.Module):
         logits = torch.Tensor([0]).to(device)
         res_sel_loss_list, contrastive_loss_list = [], []
         if original_response_selection or original_contrastive:
-            cls_logits = get_bert_output('original')
+            cls_logits, all_cls_logits, last_layer_logits = get_bert_output('original', return_hidden=True, return_layer=True)
             if original_response_selection:
-                logits = self._classification(cls_logits)  # bs, 1
+                if use_all_bert_output:
+                    logits = self._classification(self.self_attention(last_layer_logits, batch_data['original']['res_sel']['attention_mask']))
+                else:
+                    logits = self._classification(cls_logits)  # bs, 1
                 logits = logits.squeeze(-1)
                 res_sel_losses = self._criterion(logits, batch_data['original']["res_sel"]["label"].float())
                 mask = batch_data['original']["res_sel"]["label"] == -1
                 res_sel_loss = res_sel_losses.masked_fill(mask, 0).mean()
                 res_sel_loss_list.append(res_sel_loss)
             if original_contrastive:
-                cls_logits_aug = get_bert_output('augment')
+                cls_logits_aug = get_bert_output('augment')[0]
                 z = self._projection(cls_logits)
                 z_aug = self._projection(cls_logits_aug)
                 contrastive_loss_list += self._nt_xent_criterion(z, z_aug)
 
         if self.training and (new_response_selection or new_contrastive or supervised_contrastive):
-            cls_logits_contras = get_bert_output('contras')
+            cls_logits_contras = get_bert_output('contras')[0]
             if new_response_selection:
                 logits_contras = self._classification(cls_logits_contras)  # bs, 1
                 logits_contras = logits_contras.squeeze(-1)
@@ -134,7 +163,7 @@ class BertCls(nn.Module):
                 res_sel_loss_contras = res_sel_loss_contras.masked_fill(mask, 0).mean()
                 res_sel_loss_list.append(res_sel_loss_contras)
                 if less_positive_res_sel:  # less positive examples
-                    cls_logits_sample = get_bert_output('sample')
+                    cls_logits_sample = get_bert_output('sample')[0]
                     logits_sample = self._classification(cls_logits_sample)  # bs, 1
                     logits_sample = logits_sample.squeeze(-1)
                     res_sel_loss_sample = self._criterion(logits_sample, batch_data['sample']["res_sel"]["label"].float())
@@ -150,13 +179,13 @@ class BertCls(nn.Module):
                         res_sel_loss_list.append(classification_loss_three_class)
             if new_contrastive:
                 z_contras = self._projection(cls_logits_contras)
-                cls_logits_contras_aug = get_bert_output('contras_aug')
+                cls_logits_contras_aug = get_bert_output('contras_aug')[0]
                 z_contras_aug = self._projection(cls_logits_contras_aug)
                 contrastive_loss_list += self._nt_xent_criterion(z_contras, z_contras_aug)
             if supervised_contrastive:
-                sup_z_contras = self._projection_sup(get_bert_output('contras'))
-                sup_z_contras_aug = self._projection_sup(get_bert_output('contras_aug'))
-                sup_z_sample = self._projection_sup(get_bert_output('sample'))
+                sup_z_contras = self._projection_sup(get_bert_output('contras')[0])
+                sup_z_contras_aug = self._projection_sup(get_bert_output('contras_aug')[0])
+                sup_z_sample = self._projection_sup(get_bert_output('sample')[0])
                 labels = torch.cat((batch_data['contras']["res_sel"]['label2'], batch_data['contras_aug']["res_sel"]['label2'], batch_data['sample']["res_sel"]['label2']))
                 sup_z = torch.cat((sup_z_contras, sup_z_contras_aug, sup_z_sample), dim=0)
                 new_sup_z = torch.cat([sup_z[labels == target_label] for target_label in (0, 1, 2)], dim=0)
@@ -164,12 +193,16 @@ class BertCls(nn.Module):
                 new_labels = torch.cat([labels[labels == target_label] for target_label in (0, 1, 2)], dim=0)[0::2]
                 sup_con_loss = self._sup_con_loss(new_sup_z, new_labels)
                 contrastive_loss_list.append(sup_con_loss)
+
+        ins_loss = del_loss = srch_loss = torch.Tensor([0]).to(device)
         if self.hparams.do_sent_insertion and self.training:
             ins_loss = self._bert_insertion(batch_data['extra']["ins"], batch_data['extra']["ins"]["label"]).mean()
-        else:
-            ins_loss = torch.Tensor([0]).to(device)
+        if self.hparams.do_sent_deletion and self.training:
+            del_loss = self._bert_deletion(batch_data['extra']["del"], batch_data['extra']["del"]["label"]).mean()
+        if self.hparams.do_sent_search and self.training:
+            srch_loss = self._bert_search(batch_data['extra']["srch"], batch_data['extra']["srch"]["label"]).mean()
         res_sel_loss = torch.stack(res_sel_loss_list).mean()
         if len(contrastive_loss_list) == 0:
             contrastive_loss_list = [torch.Tensor([0]).to(res_sel_loss.device)]
         contrastive_loss = torch.stack(contrastive_loss_list).mean()
-        return logits, (res_sel_loss, contrastive_loss, ins_loss)
+        return logits, (res_sel_loss, contrastive_loss, ins_loss, del_loss, srch_loss)
