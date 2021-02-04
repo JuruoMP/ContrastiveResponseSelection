@@ -31,13 +31,10 @@ class BertCls(nn.Module):
                 param.requires_grad = False
 
         num_new_tok = 0
-        if self.hparams.model_type.startswith("bert_base") or self.hparams.model_type.startswith("bert_post") or self.hparams.model_type.startswith("electra_base"):
+        if self.hparams.model_type.startswith("bert_base") or self.hparams.model_type.startswith("electra_base"):
             if self.hparams.do_eot:
                 num_new_tok += 1
             # bert_post already has [EOT]
-            if self.hparams.do_sent_insertion:
-                num_new_tok += 1  # [INS]
-                self._bert_insertion = BertInsertion(hparams, self._model)
 
         self._model.resize_token_embeddings(self._model.config.vocab_size + num_new_tok)  # [EOT]
 
