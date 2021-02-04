@@ -69,6 +69,15 @@ class BertCls(nn.Module):
             nn.Linear(self.hparams.bert_hidden_dim, 1)
         )
 
+        # self._classification_list = [
+        #     nn.Sequential(
+        #         nn.Dropout(p=1 - self.hparams.dropout_keep_prob),
+        #         nn.Linear(self.hparams.bert_hidden_dim, 1)
+        #     ) for _ in range(3)
+        # ]
+
+        self.self_attention = SelfAttention(pretrained_config.hidden_size)
+
         self._classification2 = nn.Sequential(
             nn.Dropout(p=1 - self.hparams.dropout_keep_prob),
             nn.Linear(self.hparams.bert_hidden_dim, 3)
