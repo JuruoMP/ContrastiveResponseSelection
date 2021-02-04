@@ -38,6 +38,9 @@ class BertCls(nn.Module):
 
         self._model.resize_token_embeddings(self._model.config.vocab_size + num_new_tok)  # [EOT]
 
+        if self.hparams.do_sent_insertion:
+            self._bert_insertion = BertInsertion(hparams, self._model)
+
         self._classification = nn.Sequential(
             nn.Dropout(p=1 - self.hparams.dropout_keep_prob),
             nn.Linear(self.hparams.bert_hidden_dim, 1)
@@ -92,7 +95,7 @@ class BertCls(nn.Module):
                 if not return_hidden:
                     return cls_logits
                 else:
-                    return cls_logits, hidden_states
+                    return cls_logits, [x[:, 0, :] for x in hidden_states]
 
         device = batch_data['original']['res_sel']['anno_sent'].device
         if self.training:  # training
@@ -162,7 +165,7 @@ class BertCls(nn.Module):
                 sup_con_loss = self._sup_con_loss(new_sup_z, new_labels)
                 contrastive_loss_list.append(sup_con_loss)
         if self.hparams.do_sent_insertion and self.training:
-            ins_loss = self._bert_insertion(batch_data['extra']["ins"], batch_data['extra']["ins"]["label"])
+            ins_loss = self._bert_insertion(batch_data['extra']["ins"], batch_data['extra']["ins"]["label"]).mean()
         else:
             ins_loss = torch.Tensor([0]).to(device)
         res_sel_loss = torch.stack(res_sel_loss_list).mean()
