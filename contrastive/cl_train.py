@@ -177,6 +177,7 @@ class ContrastiveResponseSelection(object):
                     cl_loss = self.scaler.scale(cl_loss)
                     loss += cl_loss
                 if self.hparams.do_sent_insertion:
+                    ins_loss = ins_loss.mean()
                     accu_ins_loss += ins_loss.item()
                     ins_loss = self.scaler.scale(ins_loss)
                     loss += ins_loss
