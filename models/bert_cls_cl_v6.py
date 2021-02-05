@@ -74,6 +74,13 @@ class BertCls(nn.Module):
             nn.Linear(self.hparams.bert_hidden_dim * 2, 1)
         )
 
+        self._classification_list = nn.ModuleList([
+            nn.Sequential(
+                nn.Dropout(p=1 - self.hparams.dropout_keep_prob),
+                nn.Linear(self.hparams.bert_hidden_dim, 1)
+            ) for _ in range(4)
+        ])
+
         self.self_attention = SelfAttention(pretrained_config.hidden_size)
 
         self._classification2 = nn.Sequential(
@@ -131,6 +138,7 @@ class BertCls(nn.Module):
 
         device = batch_data['original']['res_sel']['anno_sent'].device
         use_all_bert_output = True
+        use_multi_layers = True
         if self.training:  # training
             original_response_selection, original_contrastive = True, True
             new_response_selection, new_contrastive = False, False
@@ -156,6 +164,16 @@ class BertCls(nn.Module):
                 mask = batch_data['original']["res_sel"]["label"] == -1
                 res_sel_loss = res_sel_losses.masked_fill(mask, 0).mean()
                 res_sel_loss_list.append(res_sel_loss)
+                ####################### multi layer cls prediction ########################
+                if use_multi_layers:
+                    chosen_layer_cls_logits = [all_cls_logits[i] for i in (9, 6, 3)]
+                    chosen_layer_logits = [self._classification_list[i](chosen_layer_cls_logits[i]).squeeze(-1) for i in range(3)]
+                    chosen_layer_res_sel_losses = [self._criterion(chosen_layer_logits[i],
+                                                                   batch_data['original']["res_sel"]["label"].float()) for i in range(3)]
+                    chosen_layer_res_sel_losses = [x.masked_fill(mask, 0).mean() for x in chosen_layer_res_sel_losses]
+                    res_sel_loss_list += chosen_layer_res_sel_losses
+                    logits = torch.stack([logits] + chosen_layer_logits, dim=0).mean(dim=0)
+                ####################### multi layer cls prediction ########################
             if original_contrastive:
                 cls_logits_aug = get_bert_output('augment')[0]
                 z = self._projection(cls_logits)
