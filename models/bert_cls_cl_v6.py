@@ -69,12 +69,10 @@ class BertCls(nn.Module):
             nn.Linear(self.hparams.bert_hidden_dim, 1)
         )
 
-        # self._classification_list = [
-        #     nn.Sequential(
-        #         nn.Dropout(p=1 - self.hparams.dropout_keep_prob),
-        #         nn.Linear(self.hparams.bert_hidden_dim, 1)
-        #     ) for _ in range(3)
-        # ]
+        self._classification_attn = nn.Sequential(
+            nn.Dropout(p=1 - self.hparams.dropout_keep_prob),
+            nn.Linear(self.hparams.bert_hidden_dim * 2, 1)
+        )
 
         self.self_attention = SelfAttention(pretrained_config.hidden_size)
 
@@ -148,7 +146,9 @@ class BertCls(nn.Module):
             cls_logits, all_cls_logits, last_layer_logits = get_bert_output('original', return_hidden=True, return_layer=True)
             if original_response_selection:
                 if use_all_bert_output:
-                    logits = self._classification(self.self_attention(last_layer_logits, batch_data['original']['res_sel']['attention_mask']))
+                    attn_vector = self.self_attention(last_layer_logits, batch_data['original']['res_sel']['attention_mask'])
+                    state_vector = torch.cat((cls_logits, attn_vector), dim=-1)
+                    logits = self._classification_attn(state_vector)
                 else:
                     logits = self._classification(cls_logits)  # bs, 1
                 logits = logits.squeeze(-1)

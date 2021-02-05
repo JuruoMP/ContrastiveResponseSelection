@@ -95,9 +95,9 @@ BASE_PARAMS = defaultdict(
     do_augment_response_selection=False,
     use_soft_logits=False,  # cl loss with softmax weight
     curriculum_learning=False,
-    do_sent_insertion=True,
-    do_sent_deletion=True,
-    do_sent_search=True,
+    do_sent_insertion=False,
+    do_sent_deletion=False,
+    do_sent_search=False,
 
     max_sequence_len=512,
     res_sel_loss_ratio=1.0,
