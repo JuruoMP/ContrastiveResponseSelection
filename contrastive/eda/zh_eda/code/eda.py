@@ -50,8 +50,8 @@ def synonym_replacement(words, n):
 
 
 def get_synonyms(word):
-    return word
-    # return synonyms.nearby(word)[0]
+    # return word
+    return synonyms.nearby(word)[0]
 
 
 ########################################################################
@@ -173,6 +173,7 @@ def eda(sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_aug=9)
 
     return augmented_sentences
 
-##
-# 测试用例
-# eda(sentence="我们就像蒲公英，我也祈祷着能和你飞去同一片土地")
+
+if __name__ == '__main__':
+    augment_alpha = 0.1
+    ret = eda(sentence="我们就像蒲公英，我也祈祷着能和你飞去同一片土地", alpha_sr=0, alpha_ri=augment_alpha, alpha_rs=augment_alpha)
