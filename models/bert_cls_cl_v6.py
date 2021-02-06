@@ -119,7 +119,7 @@ class BertCls(nn.Module):
         }
         def get_bert_output(name, return_hidden=False, return_layer=False):
             if bert_output_cache.get(name) is not None:
-                return bert_output_cache.get(name)
+                cls_logits, hidden_states_cls, bert_outputs = bert_output_cache.get(name)
             else:
                 batch = batch_data[name]
                 bert_outputs, _, hidden_states = self._model(
@@ -128,23 +128,24 @@ class BertCls(nn.Module):
                     attention_mask=batch["res_sel"]["attention_mask"]
                 )
                 cls_logits = bert_outputs[:, 0, :]  # bs, bert_output_size
-                bert_output_cache[name] = cls_logits
-                ret = (cls_logits,)
-                if return_hidden:
-                    ret = ret + ([x[:, 0, :] for x in hidden_states],)
-                if return_layer:
-                    ret = ret + (bert_outputs,)
-                return ret
+                hidden_states_cls = [x[:, 0, :] for x in hidden_states]
+                bert_output_cache[name] = (cls_logits, hidden_states_cls, bert_outputs)
+            ret = (cls_logits,)
+            if return_hidden:
+                ret = ret + (hidden_states_cls,)
+            if return_layer:
+                ret = ret + (bert_outputs,)
+            return ret
 
         device = batch_data['original']['res_sel']['anno_sent'].device
-        use_all_bert_output = True
-        use_multi_layers = True
+        use_all_bert_output = False
+        use_multi_layers = False
         if self.training:  # training
-            original_response_selection, original_contrastive = True, True
-            new_response_selection, new_contrastive = False, False
-            less_positive_res_sel = False
+            original_response_selection, original_contrastive = False, False
+            new_response_selection, new_contrastive = True, True
+            less_positive_res_sel = True
             three_class_classification = False
-            supervised_contrastive = False
+            supervised_contrastive = True
         else:  # evaluation
             original_response_selection, original_contrastive = True, False
             new_response_selection, new_contrastive = False, False
