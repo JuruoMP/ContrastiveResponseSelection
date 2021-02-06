@@ -46,6 +46,11 @@ CONTRASTIVE_PARAMS = defaultdict(
 AUGMENT_PARAMS = defaultdict(
     do_augment_response_selection=True,
 )
+TASK_PARAMS = defaultdict(
+    do_sent_insertion=True,
+    do_sent_deletion=True,
+    do_sent_search=True,
+)
 
 BASE_PARAMS = defaultdict(
     # lambda: None,  # Set default value to None.
