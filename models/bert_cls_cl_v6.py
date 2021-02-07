@@ -145,7 +145,7 @@ class BertCls(nn.Module):
             new_response_selection, new_contrastive = False, False
             less_positive_res_sel = False
             three_class_classification = False
-            supervised_contrastive = False
+            supervised_contrastive = self.hparams.do_contrastive
         else:  # evaluation
             original_response_selection, original_contrastive = True, False
             new_response_selection, new_contrastive = False, False
@@ -211,14 +211,27 @@ class BertCls(nn.Module):
                 z_contras_aug = self._projection(cls_logits_contras_aug)
                 contrastive_loss_list += self._nt_xent_criterion(z_contras, z_contras_aug)
             if supervised_contrastive:
-                sup_z_contras = self._projection_sup(get_bert_output('contras')[0])
-                sup_z_contras_aug = self._projection_sup(get_bert_output('contras_aug')[0])
-                sup_z_sample = self._projection_sup(get_bert_output('sample')[0])
-                labels = torch.cat((batch_data['contras']["res_sel"]['label2'], batch_data['contras_aug']["res_sel"]['label2'], batch_data['sample']["res_sel"]['label2']))
-                sup_z = torch.cat((sup_z_contras, sup_z_contras_aug, sup_z_sample), dim=0)
-                new_sup_z = torch.cat([sup_z[labels == target_label] for target_label in (0, 1, 2)], dim=0)
+                # 3 class
+                # sup_z_contras = self._projection_sup(get_bert_output('contras')[0])
+                # sup_z_contras_aug = self._projection_sup(get_bert_output('contras_aug')[0])
+                # sup_z_sample = self._projection_sup(get_bert_output('sample')[0])
+                # labels = torch.cat((batch_data['contras']["res_sel"]['label2'], batch_data['contras_aug']["res_sel"]['label2'], batch_data['sample']["res_sel"]['label2']))
+                # sup_z = torch.cat((sup_z_contras, sup_z_contras_aug, sup_z_sample), dim=0)
+                # new_sup_z = torch.cat([sup_z[labels == target_label] for target_label in (0, 1, 2)], dim=0)
+                # new_sup_z = torch.stack((new_sup_z[0::2], new_sup_z[1::2]), dim=1)
+                # new_labels = torch.cat([labels[labels == target_label] for target_label in (0, 1, 2)], dim=0)[0::2]
+                # sup_con_loss = self._sup_con_loss(new_sup_z, new_labels)
+                # contrastive_loss_list.append(sup_con_loss)
+                # 2 class
+                cls_logits = get_bert_output('original')[0]
+                cls_logits_aug = get_bert_output('augment')[0]
+                sup_z_original = self._projection_sup(cls_logits)
+                sup_z_aug = self._projection_sup(cls_logits_aug)
+                sup_z = torch.cat((sup_z_original, sup_z_aug), dim=0)
+                labels = torch.cat((batch_data['original']["res_sel"]['label'], batch_data['augment']["res_sel"]['label']))
+                new_sup_z = torch.cat([sup_z[labels == target_label] for target_label in (0, 1)], dim=0)
                 new_sup_z = torch.stack((new_sup_z[0::2], new_sup_z[1::2]), dim=1)
-                new_labels = torch.cat([labels[labels == target_label] for target_label in (0, 1, 2)], dim=0)[0::2]
+                new_labels = torch.cat([labels[labels == target_label] for target_label in (0, 1)], dim=0)[0::2]
                 sup_con_loss = self._sup_con_loss(new_sup_z, new_labels)
                 contrastive_loss_list.append(sup_con_loss)
 

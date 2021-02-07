@@ -223,7 +223,7 @@ class ContrastiveResponseSelection(object):
                     #     accu_res_sel_loss / accu_cnt, accu_ins_loss / accu_cnt, accu_del_loss / accu_cnt,
                     #     accu_srch_loss / accu_cnt,
                     #     self.optimizer.param_groups[0]['lr'])
-                    description = "[Epoch:{:2d}][Iter:{:3d}][Loss: {:.2e}][Res/CL/Ins-Del-Srch: {:.2e}/{:.2e}/{:.2e}-{:.2e}-{:.2e}][lr: {:.2e}]".format(
+                    description = "[Epoch:{:2d}][Iter:{:5d}][Loss: {:.2e}][Res/CL/Ins/Del/Srch: {:.2e}/{:.2e}/{:.2e}/{:.2e}/{:.2e}][lr: {:.2e}]".format(
                         epoch,
                         global_iteration_step, accu_loss / accu_cnt, accu_res_sel_loss / accu_cnt,
                         accu_cl_loss / accu_cnt, accu_ins_loss / accu_cnt, accu_del_loss / accu_cnt, accu_srch_loss / accu_cnt,
