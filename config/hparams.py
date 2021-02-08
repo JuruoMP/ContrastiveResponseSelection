@@ -59,7 +59,7 @@ BASE_PARAMS = defaultdict(
 
     # Input params
     train_batch_size=16,  # 32
-    eval_batch_size=1,  # 1000
+    eval_batch_size=250,  # 1000
     virtual_batch_size=64,
 
     # Training BERT params
