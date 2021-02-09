@@ -11,11 +11,6 @@ from models.bert_insertion import BertInsertion
 from models.bert_deletion import BertDeletion
 from models.bert_search import BertSearch
 
-
-def label_smoothing(labels, smooth=0.05):
-    return abs(labels - smooth)
-
-
 class SelfAttention(nn.Module):
     def __init__(self, d_hid, dropout=0.):
         super().__init__()
@@ -165,7 +160,7 @@ class BertCls(nn.Module):
                 else:
                     logits = self._classification(cls_logits)  # bs, 1
                 logits = logits.squeeze(-1)
-                res_sel_losses = self._criterion(logits, label_smoothing(batch_data['original']["res_sel"]["label"].float()))
+                res_sel_losses = self._criterion(logits, batch_data['original']["res_sel"]["label"].float())
                 mask = batch_data['original']["res_sel"]["label"] == -1
                 res_sel_loss = res_sel_losses.masked_fill(mask, 0).mean()
                 res_sel_loss_list.append(res_sel_loss)
