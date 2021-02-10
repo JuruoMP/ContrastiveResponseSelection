@@ -20,7 +20,7 @@ UBUNTU_PARAMS = defaultdict(
     recall_k_list=[1, 2, 5, 10],
     evaluate_data_type="test",
     language="english",
-    eval_batch_size=10,
+    eval_batch_size=1,
 )
 
 DOUBAN_PARAMS = defaultdict(
@@ -58,7 +58,7 @@ BASE_PARAMS = defaultdict(
     # gpu_ids=[0],  # [0,1,2,3]
 
     # Input params
-    train_batch_size=16,  # 32
+    train_batch_size=1,  # 32
     eval_batch_size=1,  # 1000
     virtual_batch_size=64,
 
