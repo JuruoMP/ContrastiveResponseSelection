@@ -239,7 +239,7 @@ class ContrastiveResponseSelection(object):
                 if (batch_idx * 10) % len(self.train_dataloader) == 0:
                     state_dict = self.model.module.state_dict() if isinstance(self.model, nn.DataParallel) else self.model.state_dict()
                     torch.save(state_dict, os.path.join(self.checkpoint_manager.ckpt_dirpath, f'checkpoint_{epoch}_{batch_idx}.pt'))
-                    recall_list = evaluation.run_evaluate(self.previous_model_path)
+                    recall_list = evaluation.run_evaluate(self.model)
                     if recall_list[0] > best_recall_list[0]:
                         best_recall_list = recall_list
 
