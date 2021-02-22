@@ -58,7 +58,7 @@ BASE_PARAMS = defaultdict(
     # gpu_ids=[0],  # [0,1,2,3]
 
     # Input params
-    train_batch_size=1,  # 32
+    train_batch_size=32,  # 32
     eval_batch_size=1,  # 1000
     virtual_batch_size=64,
 

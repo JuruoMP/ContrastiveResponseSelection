@@ -36,7 +36,6 @@ class BertCls(nn.Module):
             os.path.join(self.hparams.bert_pretrained_dir, self.hparams.bert_pretrained,
                          "%s-config.json" % self.hparams.bert_pretrained),
         )
-        pretrained_config.output_hidden_states = True
         self._model = hparams.pretrained_model.from_pretrained(
             os.path.join(self.hparams.bert_pretrained_dir, self.hparams.bert_pretrained,
                          self.hparams.bert_checkpoint_path),
@@ -116,24 +115,19 @@ class BertCls(nn.Module):
             'sample': None,
             'extra': None,
         }
-        def get_bert_output(name, return_hidden=False, return_layer=False):
+        def get_bert_output(name):
             if bert_output_cache.get(name) is not None:
-                cls_logits, hidden_states_cls, bert_outputs = bert_output_cache.get(name)
+                cls_logits = bert_output_cache.get(name)
             else:
                 batch = batch_data[name]
-                bert_outputs, _, hidden_states = self._model(
+                bert_outputs = self._model(
                     batch["res_sel"]["anno_sent"],
                     token_type_ids=batch["res_sel"]["segment_ids"],
                     attention_mask=batch["res_sel"]["attention_mask"]
-                )
+                )[0]
                 cls_logits = bert_outputs[:, 0, :]  # bs, bert_output_size
-                hidden_states_cls = [x[:, 0, :] for x in hidden_states]
-                bert_output_cache[name] = (cls_logits, hidden_states_cls, bert_outputs)
+                bert_output_cache[name] = cls_logits
             ret = (cls_logits,)
-            if return_hidden:
-                ret = ret + (hidden_states_cls,)
-            if return_layer:
-                ret = ret + (bert_outputs,)
             return ret
 
         device = batch_data['original']['res_sel']['anno_sent'].device
@@ -151,28 +145,14 @@ class BertCls(nn.Module):
         logits = torch.Tensor([0]).to(device)
         res_sel_loss_list, contrastive_loss_list = [], []
         if original_response_selection or original_contrastive:
-            cls_logits, all_cls_logits, last_layer_logits = get_bert_output('original', return_hidden=True, return_layer=True)
+            cls_logits = get_bert_output('original')[0]
             if original_response_selection:
-                if use_all_bert_output:
-                    attn_vector = self.self_attention(last_layer_logits, batch_data['original']['res_sel']['attention_mask'])
-                    state_vector = torch.cat((cls_logits, attn_vector), dim=-1)
-                    logits = self._classification_attn(state_vector)
-                else:
-                    logits = self._classification(cls_logits)  # bs, 1
+                logits = self._classification(cls_logits)  # bs, 1
                 logits = logits.squeeze(-1)
                 res_sel_losses = self._criterion(logits, batch_data['original']["res_sel"]["label"].float())
                 mask = batch_data['original']["res_sel"]["label"] == -1
                 res_sel_loss = res_sel_losses.masked_fill(mask, 0).mean()
                 res_sel_loss_list.append(res_sel_loss)
-                ####################### multi layer cls prediction ########################
-                if use_multi_layers:
-                    chosen_layer_cls_logits = [all_cls_logits[i] for i in (9, 6, 3)]
-                    chosen_layer_logits = [self._classification_list[i](chosen_layer_cls_logits[i]).squeeze(-1) for i in range(3)]
-                    chosen_layer_res_sel_losses = [self._criterion(chosen_layer_logits[i], batch_data['original']["res_sel"]["label"].float()) for i in range(3)]
-                    chosen_layer_res_sel_losses = [x.masked_fill(mask, 0).mean() for x in chosen_layer_res_sel_losses]
-                    res_sel_loss_list += chosen_layer_res_sel_losses
-                    logits = torch.stack([logits] + chosen_layer_logits, dim=0).mean(dim=0)
-                ####################### multi layer cls prediction ########################
             if original_contrastive:
                 cls_logits_aug = get_bert_output('augment')[0]
                 z = self._projection(cls_logits)

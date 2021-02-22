@@ -236,12 +236,12 @@ class ContrastiveResponseSelection(object):
                         self._logger.info(description)
                         accu_loss, accu_cl_loss, accu_res_sel_loss, accu_ins_loss, accu_del_loss, accu_srch_loss, accu_cnt = 0, 0, 0, 0, 0, 0, 0
 
-                if (batch_idx * 10) % len(self.train_dataloader) == 0:
-                    state_dict = self.model.module.state_dict() if isinstance(self.model, nn.DataParallel) else self.model.state_dict()
-                    torch.save(state_dict, os.path.join(self.checkpoint_manager.ckpt_dirpath, f'checkpoint_{epoch}_{batch_idx}.pt'))
-                    recall_list = evaluation.run_evaluate(self.model)
-                    if recall_list[0] > best_recall_list[0]:
-                        best_recall_list = recall_list
+                # if (batch_idx * 10) % len(self.train_dataloader) == 0:
+                #     state_dict = self.model.module.state_dict() if isinstance(self.model, nn.DataParallel) else self.model.state_dict()
+                #     torch.save(state_dict, os.path.join(self.checkpoint_manager.ckpt_dirpath, f'checkpoint_{epoch}_{batch_idx}.pt'))
+                #     recall_list = evaluation.run_evaluate(self.model)
+                #     if recall_list[0] > best_recall_list[0]:
+                #         best_recall_list = recall_list
 
             self.checkpoint_manager.step(epoch)
             self.previous_model_path = os.path.join(self.checkpoint_manager.ckpt_dirpath, "checkpoint_%d.pth" % (epoch))
