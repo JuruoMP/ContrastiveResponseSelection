@@ -43,7 +43,8 @@ class BertCls(nn.Module):
         )
 
         if hparams.bert_freeze_layer > 0:
-            freeze_layers = self._model.encoder.layer
+            self._model.embeddings.requires_grad = False
+            freeze_layers = self._model.encoder.layer[:hparams.bert_freeze_layer]
             for param in freeze_layers:
                 param.requires_grad = False
 
@@ -103,6 +104,11 @@ class BertCls(nn.Module):
             self._nt_xent_criterion = NTXentLoss(temperature=0.5, use_cosine_similarity=True)
         self._nt_xent_criterion = DynamicNTXentLoss(temperature=0.5, use_cosine_similarity=True)
         self._sup_con_loss = SupConLoss(temperature=0.1)
+
+    def freeze_bert(self):
+        freeze_layers = self._model.encoder.layer
+        for param in freeze_layers:
+            param.requires_grad = False
 
     @amp.autocast()
     def forward(self, batch_data):
