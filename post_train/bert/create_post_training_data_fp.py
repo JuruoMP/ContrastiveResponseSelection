@@ -92,7 +92,7 @@ class CreateBertPretrainingData(object):
                     if document_cnt % 50000 == 0:
                         print("%d documents have been tokenized!" % document_cnt)
                     ##################
-                    # if document_cnt > 5000: break
+                    # if document_cnt > 10000: break
                     #######################
 
                 tokens = self._bert_tokenizer.tokenize(line)
@@ -181,7 +181,9 @@ class CreateBertPretrainingData(object):
         # input.
         instances = []
 
-        if len(document) == 2:
+        if len(document) == 1:
+            return instances
+        elif len(document) == 2:
             next_type = rng.randint(0, 1)
         else:
             next_type = rng.randint(0, 2)
@@ -220,6 +222,8 @@ class CreateBertPretrainingData(object):
         assert len(tokens_a) >= 1
         assert len(tokens_b) >= 1
         if len(tokens_a) + len(tokens_b) > max_num_tokens:
+            if len(tokens_b) > 200:
+                tokens_b = tokens_b[:200]
             a_length = max_num_tokens - len(tokens_b)
             tokens_a = tokens_a[-a_length:]
 
@@ -239,6 +243,11 @@ class CreateBertPretrainingData(object):
             segment_ids.append(1)
         tokens.append("[SEP]")
         segment_ids.append(1)
+
+        # try:
+        #     assert len(tokens) <= max_seq_length
+        # except:
+        #     a = 1
 
         (tokens, masked_lm_positions, masked_lm_labels) = self.create_masked_lm_predictions(
             tokens, masked_lm_prob, max_predictions_per_seq, vocab_words, rng)
