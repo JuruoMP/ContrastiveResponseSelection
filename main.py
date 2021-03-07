@@ -10,7 +10,7 @@ import torch
 
 from config.hparams import *
 from train import ResponseSelection
-from post_train.post_training import PostTraining
+from post_train.post_training_sp import PostTraining
 from contrastive.cl_train import ContrastiveResponseSelection
 
 from evaluation import Evaluation
@@ -202,4 +202,4 @@ if __name__ == '__main__':
     if args.evaluate:
         evaluate_model(args, hparams)
     else:
-        recall_list, model_path = train_model(args, hparams)
+        _ = train_model(args, hparams)
