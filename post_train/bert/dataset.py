@@ -17,13 +17,17 @@ class BertPostTrainingDataset(Dataset):
             self,
             hparams,
             split: str = "",
+            data_file=None
     ):
         super().__init__()
 
         self.hparams = hparams
         self.split = split
 
-        with h5py.File(os.path.join(self.hparams.data_dir, "%s_post_training.hdf5" % self.hparams.task_name),
+        if not data_file:
+            data_file = "%s_post_training.hdf5" % self.hparams.task_name
+
+        with h5py.File(os.path.join(self.hparams.data_dir, data_file),
                        "r") as features_hdf:
             self.feature_keys = list(features_hdf.keys())
             self.num_instances = np.array(features_hdf.get("next_sentence_labels")).shape[0]

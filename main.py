@@ -10,7 +10,8 @@ import torch
 
 from config.hparams import *
 from train import ResponseSelection
-from post_train.post_training_sp import PostTraining
+from post_train.post_training import PostTraining
+from post_train.post_training_sentencepiece import PostTraining as PostTrainingSentencepiece
 from contrastive.cl_train import ContrastiveResponseSelection
 
 from evaluation import Evaluation
@@ -46,6 +47,7 @@ PRETRAINED_MODEL_MAP = {
 TRAINING_TYPE_MAP = {
     "fine_tuning": ResponseSelection,
     "post_training": PostTraining,
+    "post_training_sentencepiece": PostTrainingSentencepiece,
     "contrastive": ContrastiveResponseSelection
 }
 
