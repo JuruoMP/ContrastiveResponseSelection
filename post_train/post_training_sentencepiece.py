@@ -59,7 +59,7 @@ class PostTraining(object):
         }
         self.model = training_model_map[self.pretrained_type](self.hparams)
         for name, param in self.model.named_parameters():
-            if 'word_embeddings' not in name:
+            if 'word_embeddings' not in name and 'cls' not in name:
                 param.requires_grad = False
         self.model = self.model.to(self.device)
 
