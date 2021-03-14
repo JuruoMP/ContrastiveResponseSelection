@@ -172,9 +172,9 @@ class PostTraining(object):
                     #     global_iteration_step, (accu_electra_loss / accu_count),
                     #     (accu_mlm_loss / accu_count), (accu_nsp_loss / accu_count),
                     #     self.optimizer.param_groups[0]['lr'])
-                    description = "[Epoch: {:3d}][Iter: {:6d}][LM_Loss: {:6f}][lr: {:.1e}]".format(
+                    description = "[Epoch: {:3d}][Iter: {:6d}][MLM_Loss: {:6f}][lr: {:.1e}]".format(
                         epoch,
-                        global_iteration_step, (accu_electra_loss / accu_count),
+                        global_iteration_step, (accu_mlm_loss / accu_count),
                         self.optimizer.param_groups[0]['lr'])
                     tqdm_batch_iterator.set_description(description)
 
