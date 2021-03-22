@@ -13,7 +13,7 @@ from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
 import sentencepiece as spm
 
-from contrastive.cl_evaluation import ContrastiveEvaluation
+from contrastive.cl_evaluation_sentencepiece import ContrastiveEvaluation
 from data.contrastive_dataset_v6_sentencepiece import ContrastiveResponseSelectionDatasetSentencepiece
 from models import Model
 from models.utils.checkpointing import CheckpointManager, load_checkpoint
@@ -151,7 +151,6 @@ class ContrastiveResponseSelection(object):
         best_recall_list, best_model_path = [0], ''
 
         for epoch in range(self.start_epoch, self.hparams.num_epochs + 1):
-            global_variables.epoch = epoch
             self.model.train()
             tqdm_batch_iterator = tqdm(self.train_dataloader)
             accu_batch = 0
@@ -213,7 +212,6 @@ class ContrastiveResponseSelection(object):
                     accu_batch = 0
 
                     global_iteration_step += 1
-                    global_variables.global_step += 1
                     # description = "[{}][Epoch: {:3d}][Iter: {:6d}][Loss: {:6f}][Res_Loss: {:4f}]" \
                     #               "[Ins_Loss: {:4f}][Del_Loss: {:4f}][Srch_Loss: {:4f}][lr: {:7f}]".format(
                     #     datetime.utcnow() - train_begin,
