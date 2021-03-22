@@ -58,6 +58,7 @@ class ContrastiveResponseSelection(object):
         print('\t* Building model...')
 
         self.model = Model(self.hparams)
+        self.model._bert_model.resize_token_embeddings(len(self.sp_tokenizer))
         self.model = self.model.to(self.device)
 
         # Use Multi-GPUs
