@@ -4,7 +4,7 @@ from models.bert_insertion import BertInsertion
 # from models.bert_cls_moe import BertClsMoe
 
 
-def Model(hparams, *args):
+def Model(hparams, *args, **kwargs):
     name_model_map = {
         "bert_base": BertCls,
         "bert_post": BertCls,
@@ -17,4 +17,4 @@ def Model(hparams, *args):
         "bert_post_eot": BertEOT,
     }
 
-    return name_model_map[hparams.model_type](hparams, *args)
+    return name_model_map[hparams.model_type](hparams, *args, **kwargs)
