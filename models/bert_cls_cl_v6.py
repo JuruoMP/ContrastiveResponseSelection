@@ -28,7 +28,7 @@ class SelfAttention(nn.Module):
 
 
 class BertCls(nn.Module):
-    def __init__(self, hparams):
+    def __init__(self, hparams, resize_vocab=None):
         super(BertCls, self).__init__()
         self.hparams = hparams
 
@@ -36,6 +36,8 @@ class BertCls(nn.Module):
             os.path.join(self.hparams.bert_pretrained_dir, self.hparams.bert_pretrained,
                          "%s-config.json" % self.hparams.bert_pretrained),
         )
+        if resize_vocab:
+            pretrained_config.vocab_size = resize_vocab
         self._model = hparams.pretrained_model.from_pretrained(
             os.path.join(self.hparams.bert_pretrained_dir, self.hparams.bert_pretrained,
                          self.hparams.bert_checkpoint_path),
