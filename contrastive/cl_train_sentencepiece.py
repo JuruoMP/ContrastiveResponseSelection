@@ -11,18 +11,19 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
+import sentencepiece as spm
 
 from contrastive.cl_evaluation import ContrastiveEvaluation
 from data.contrastive_dataset_v6_sentencepiece import ContrastiveResponseSelectionDatasetSentencepiece
 from models import Model
 from models.utils.checkpointing import CheckpointManager, load_checkpoint
-import global_variables
 
 
 class ContrastiveResponseSelection(object):
     def __init__(self, hparams):
         self.hparams = hparams
         self._logger = logging.getLogger(__name__)
+        self.sp_tokenizer = spm.SentencePieceProcessor(model_file='data/ubuntu_corpus_v1/ubuntu_sp_0.9995.model')
 
         random.seed(hparams.random_seed)
         np.random.seed(hparams.random_seed)
