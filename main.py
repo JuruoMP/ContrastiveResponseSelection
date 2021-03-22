@@ -13,6 +13,7 @@ from train import ResponseSelection
 from post_train.post_training import PostTraining
 from post_train.post_training_sentencepiece import PostTraining as PostTrainingSentencepiece
 from contrastive.cl_train import ContrastiveResponseSelection
+from contrastive.cl_train_sentencepiece import ContrastiveResponseSelection as ContrastiveResponseSelectionSentencepiece
 
 from evaluation import Evaluation
 from contrastive.cl_evaluation import ContrastiveEvaluation
@@ -48,7 +49,8 @@ TRAINING_TYPE_MAP = {
     "fine_tuning": ResponseSelection,
     "post_training": PostTraining,
     "post_training_sentencepiece": PostTrainingSentencepiece,
-    "contrastive": ContrastiveResponseSelection
+    "contrastive": ContrastiveResponseSelection,
+    "contrastive_sentencepiece": ContrastiveResponseSelectionSentencepiece
 }
 
 EVAL_TYPE_MAP = {
