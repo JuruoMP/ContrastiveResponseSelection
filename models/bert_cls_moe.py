@@ -113,9 +113,9 @@ class BertMoeLayer(nn.Module):
         routing_expert = routing_scores.argmax(dim=-1)
         flat_attention_output = attention_output.view(-1, attention_output.size(-1))
         flat_routing_expert = routing_expert.view(-1)
-        flat_intermediate_output = torch.zeros(batch_size * max_length, self.config.intermediate_size).to(device)
+        flat_intermediate_output = torch.zeros(batch_size * max_length, self.config.intermediate_size, device=device)
         for i in range(self.config.n_expert):
-            expert_intermediate_output = self.intermediate[i](flat_attention_output[flat_routing_expert == i])  # todo: warning: no expert working now
+            expert_intermediate_output = self.intermediate[i](flat_attention_output[flat_routing_expert == i])
             flat_intermediate_output[flat_routing_expert == i] = expert_intermediate_output
         intermediate_output = flat_intermediate_output.view(batch_size, max_length, -1)
         layer_output = self.output(intermediate_output, attention_output)
