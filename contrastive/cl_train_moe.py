@@ -16,7 +16,6 @@ from contrastive.cl_evaluation import ContrastiveEvaluation
 from data.contrastive_dataset_v6 import ContrastiveResponseSelectionDataset
 from models import Model
 from models.utils.checkpointing import CheckpointManager, load_checkpoint
-import global_variables
 
 
 class ContrastiveResponseSelectionMoe(object):
@@ -133,11 +132,6 @@ class ContrastiveResponseSelectionMoe(object):
         self._build_model()
         self._setup_training()
 
-        global_variables.num_iter = len(self.train_dataset) // self.hparams.virtual_batch_size
-        global_variables.epoch = 0
-
-        # ins, del, mod check!
-
         # Evaluation Setup
         evaluation = ContrastiveEvaluation(self.hparams, model=self.model)
 
@@ -152,7 +146,6 @@ class ContrastiveResponseSelectionMoe(object):
         best_recall_list, best_model_path = [0], ''
 
         for epoch in range(self.start_epoch, self.hparams.num_epochs + 1):
-            global_variables.epoch = epoch
             self.model.train()
             tqdm_batch_iterator = tqdm(self.train_dataloader)
             accu_batch = 0
@@ -199,7 +192,6 @@ class ContrastiveResponseSelectionMoe(object):
                     accu_batch = 0
 
                     global_iteration_step += 1
-                    global_variables.global_step += 1
                     # description = "[{}][Epoch: {:3d}][Iter: {:6d}][Loss: {:6f}][Res_Loss: {:4f}]" \
                     #               "[Ins_Loss: {:4f}][Del_Loss: {:4f}][Srch_Loss: {:4f}][lr: {:7f}]".format(
                     #     datetime.utcnow() - train_begin,
@@ -217,7 +209,7 @@ class ContrastiveResponseSelectionMoe(object):
                     # tensorboard
                     if global_iteration_step % self.hparams.tensorboard_step == 0:
                         self._logger.info(description)
-                        accu_loss, accu_cl_loss, accu_res_sel_loss, accu_ins_loss, accu_del_loss, accu_srch_loss, accu_cnt = 0, 0, 0, 0, 0, 0, 0
+                        accu_loss, accu_res_sel_loss, accu_moe_loss, accu_cnt = 0, 0, 0, 0
 
                 # if (batch_idx * 10) % len(self.train_dataloader) == 0:
                 #     state_dict = self.model.module.state_dict() if isinstance(self.model, nn.DataParallel) else self.model.state_dict()
