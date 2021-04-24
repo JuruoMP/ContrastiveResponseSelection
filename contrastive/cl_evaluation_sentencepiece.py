@@ -9,7 +9,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from data.contrastive_dataset_v6 import ContrastiveResponseSelectionDataset
+from data.contrastive_dataset_v6_sentencepiece import ContrastiveResponseSelectionDatasetSentencepiece
 from models import Model
 from models.utils.checkpointing import load_checkpoint
 from models.utils.scorer import calculate_candidates_ranking, logits_mrr, \
@@ -51,7 +51,7 @@ class ContrastiveEvaluation(object):
     def _build_dataloader(self, do_valid=False, do_test=False, do_train=False):
 
         if do_train:
-            self.train_dataset = ContrastiveResponseSelectionDataset(
+            self.train_dataset = ContrastiveResponseSelectionDatasetSentencepiece(
                 self.hparams,
                 split="train",
             )
@@ -61,11 +61,11 @@ class ContrastiveEvaluation(object):
                 num_workers=self.hparams.cpu_workers,
                 drop_last=False,
                 shuffle=False,
-                collate_fn=ContrastiveResponseSelectionDataset.collate_fn,
+                collate_fn=ContrastiveResponseSelectionDatasetSentencepiece.collate_fn,
             )
 
         if do_valid:
-            self.valid_dataset = ContrastiveResponseSelectionDataset(
+            self.valid_dataset = ContrastiveResponseSelectionDatasetSentencepiece(
                 self.hparams,
                 split="dev",
             )
@@ -74,11 +74,11 @@ class ContrastiveEvaluation(object):
                 batch_size=self.hparams.eval_batch_size,
                 num_workers=self.hparams.cpu_workers,
                 drop_last=False,
-                collate_fn=ContrastiveResponseSelectionDataset.collate_fn,
+                collate_fn=ContrastiveResponseSelectionDatasetSentencepiece.collate_fn,
             )
 
         if do_test:
-            self.test_dataset = ContrastiveResponseSelectionDataset(
+            self.test_dataset = ContrastiveResponseSelectionDatasetSentencepiece(
                 self.hparams,
                 split="test",
             )
@@ -88,7 +88,7 @@ class ContrastiveEvaluation(object):
                 batch_size=self.hparams.eval_batch_size,
                 num_workers=self.hparams.cpu_workers,
                 drop_last=False,
-                collate_fn=ContrastiveResponseSelectionDataset.collate_fn,
+                collate_fn=ContrastiveResponseSelectionDatasetSentencepiece.collate_fn,
             )
 
     def _build_model(self):
@@ -216,21 +216,22 @@ class ContrastiveEvaluation(object):
         pkl.dump(ret_logits, open(f'cache/{self.hparams.task_name}_soft_logits_{datetime.now().strftime("%m%d%H%M%S")}.pkl', 'wb'))
 
 
-    def run_evaluate_with_data(self, evaluation_path, data):
+    def run_evaluate_with_data(self, evaluation_path, data=None, return_vec=False):
         self._logger.info("Evaluation")
         ret = []
 
         test_dataset = ContrastiveResponseSelectionDataset(
             self.hparams,
-            split="",
+            split="test",
             data=data,
         )
 
         test_dataloader = DataLoader(
             test_dataset,
-            batch_size=128,
+            batch_size=1,
             num_workers=self.hparams.cpu_workers,
             drop_last=False,
+            collate_fn=ContrastiveResponseSelectionDataset.collate_fn,
         )
 
         model_state_dict, optimizer_state_dict = load_checkpoint(evaluation_path)
@@ -242,14 +243,29 @@ class ContrastiveEvaluation(object):
 
         self.model.eval()
 
+        # with torch.no_grad():
+        #     for batch_idx, batch in enumerate(tqdm(test_dataloader)):
+        #         buffer_batch = batch[0].copy()
+        #         for key in buffer_batch["res_sel"]:
+        #             buffer_batch["res_sel"][key] = buffer_batch["res_sel"][key].to(self.device)
+        #         buffer_batch_dict = {'original': buffer_batch}
+        #         logits, loss = self.model(buffer_batch_dict)
+        #         pred = torch.sigmoid(logits).to("cpu").tolist()
+        #         ret += pred
+
         with torch.no_grad():
+            all_cls_logits = []
             for batch_idx, batch in enumerate(tqdm(test_dataloader)):
-                buffer_batch = batch[0].copy()
+                buffer_batch = batch.copy()
                 for key in buffer_batch["res_sel"]:
                     buffer_batch["res_sel"][key] = buffer_batch["res_sel"][key].to(self.device)
-                buffer_batch_dict = {'original': buffer_batch}
-                logits, loss = self.model(buffer_batch_dict)
-                pred = torch.sigmoid(logits).to("cpu").tolist()
-                ret += pred
-
+                logits, cls_logits, losses = self.model({'original': buffer_batch})
+                cls_logits = cls_logits.detach().cpu()
+                all_cls_logits.append(cls_logits)
+            all_cls_logits = torch.cat(all_cls_logits, dim=0)
+            all_vecs_numpy = all_cls_logits.numpy()
+            pkl.dump(all_vecs_numpy, open('all_vecs_cl_task.numpy', 'wb'))
+            a = 1
+        if return_vec:
+            return ret, all_cls_logits
         return ret

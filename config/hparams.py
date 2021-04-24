@@ -40,23 +40,16 @@ ECOMMERCE_PARAMS = defaultdict(
 )
 
 # MULTI-TASK PARAMS
-INSERTION_PARAMS = defaultdict(
-    do_sent_insertion=True,  # True or False for jude
-)
-DELETION_PARAMS = defaultdict(
-    do_sent_deletion=True,  # True or False for jude
-)
-SEARCH_PARAMS = defaultdict(
-    do_sent_search=True,  # True or False for jude
-)
 CONTRASTIVE_PARAMS = defaultdict(
     do_contrastive=True,
 )
 AUGMENT_PARAMS = defaultdict(
     do_augment_response_selection=True,
 )
-RANK_PARAMS = defaultdict(
-    do_rank_loss=True,
+TASK_PARAMS = defaultdict(
+    do_sent_insertion=True,
+    do_sent_deletion=True,
+    do_sent_search=True,
 )
 
 BASE_PARAMS = defaultdict(
@@ -66,7 +59,7 @@ BASE_PARAMS = defaultdict(
 
     # Input params
     train_batch_size=32,  # 32
-    eval_batch_size=1000,  # 1000
+    eval_batch_size=1,  # 1000
     virtual_batch_size=64,
 
     # Training BERT params
@@ -102,23 +95,18 @@ BASE_PARAMS = defaultdict(
     do_adversarial_test=True,
 
     auxiliary_loss_type="sigmoid",  # softmax or sigmoid
-    do_sent_insertion=False,  # True or False for jude
-    do_sent_deletion=False,  # True or False for jude
-    do_sent_search=False,  # True or False for jude
     do_contrastive=False,  # True for contrastive learning
     use_batch_negative=False,
     do_augment_response_selection=False,
-    do_rank_loss=False,
-    dynamic_loss=False,
-    dynamic_logits=False,
+    use_soft_logits=False,  # cl loss with softmax weight
+    curriculum_learning=False,
+    do_sent_insertion=False,
+    do_sent_deletion=False,
+    do_sent_search=False,
 
     max_sequence_len=512,
     res_sel_loss_ratio=1.0,
-    ins_loss_ratio=1.0,  # 0.01, 0.1, 0.5, 1,
-    del_loss_ratio=1.0,  # 0.01, 0.1, 0.5, 1,
-    srch_loss_ratio=1.0,  # 0.01, 0.1, 0.5, 1,
     cl_loss_ratio=1.0,
-    rank_loss_ratio=1.0,
     projection_dim=256,
     max_utt_len=5,  # ubuntu : 5
     bert_freeze_layer=6,

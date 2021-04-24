@@ -11,7 +11,9 @@ import torch
 from config.hparams import *
 from train import ResponseSelection
 from post_train.post_training import PostTraining
+from post_train.post_training_model_cl import PostTrainingModelCL
 from contrastive.cl_train import ContrastiveResponseSelection
+from contrastive.cl_train_sentencepiece import ContrastiveResponseSelection as ContrastiveResponseSelectionSentencepiece
 
 from evaluation import Evaluation
 from contrastive.cl_evaluation import ContrastiveEvaluation
@@ -46,7 +48,9 @@ PRETRAINED_MODEL_MAP = {
 TRAINING_TYPE_MAP = {
     "fine_tuning": ResponseSelection,
     "post_training": PostTraining,
-    "contrastive": ContrastiveResponseSelection
+    "post_training_model_cl": PostTrainingModelCL,
+    "contrastive": ContrastiveResponseSelection,
+    "contrastive_sentencepiece": ContrastiveResponseSelectionSentencepiece
 }
 
 EVAL_TYPE_MAP = {
@@ -55,21 +59,15 @@ EVAL_TYPE_MAP = {
 }
 
 MULTI_TASK_TYPE_MAP = {
-    "ins": INSERTION_PARAMS,
-    "del": DELETION_PARAMS,
-    "srch": SEARCH_PARAMS,
-    "contras": CONTRASTIVE_PARAMS,
+    "cl": CONTRASTIVE_PARAMS,
+    "task": TASK_PARAMS,
     "aug": AUGMENT_PARAMS,
-    "rank": RANK_PARAMS,
 }
 
 
 def set_random_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -154,18 +152,22 @@ if __name__ == '__main__':
     arg_parser.add_argument("--bert_checkpoint_path", dest="bert_checkpoint_path", type=str,
                             default="bert-base-uncased-pytorch_model.bin",
                             help="bert pretrained directory")  # bert-base-uncased, bert-post-uncased
+    arg_parser.add_argument("--load_pthpath", dest="load_pthpath", type=str, default="",
+                            help="bert pretrained directory")  # bert-base-uncased, bert-post-uncased
     arg_parser.add_argument("--evaluate", dest="evaluate", type=str,
                             help="Evaluation Checkpoint", default="")
     arg_parser.add_argument("--training_type", dest="training_type", type=str, default="fine_tuning",
                             help="fine_tuning or post_training")
     arg_parser.add_argument("--multi_task_type", dest="multi_task_type", type=str, default="",
-                            help="ins,del,srch,contras,aug,rank")
+                            help="cl,task")
     arg_parser.add_argument("--gpu_ids", dest="gpu_ids", type=str,
                             help="gpu_ids", default="0")
     arg_parser.add_argument("--electra_gen_config", dest="electra_gen_config", type=str,
                             help="electra_gen_config", default="")  # electra-base-gen, electra-base-chinese-gen
     arg_parser.add_argument("--use_batch_negative", dest="use_batch_negative", type=bool, default=False,
                             help="Use all examples in the batch as negative for contrastive learning")
+    arg_parser.add_argument("--use_soft_logits", dest="use_soft_logits", type=bool, default=False)
+    arg_parser.add_argument("--curriculum_learning", dest="curriculum_learning", type=bool, default=False)
 
     args = arg_parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_ids
@@ -177,11 +179,14 @@ if __name__ == '__main__':
     hparams["bert_pretrained_dir"] = args.bert_pretrained_dir
     hparams["bert_pretrained"] = args.bert_pretrained
     hparams["bert_checkpoint_path"] = args.bert_checkpoint_path
+    hparams["load_pthpath"] = args.load_pthpath
     hparams["model_type"] = args.model
     hparams["task_name"] = args.task_name
     hparams["task_type"] = args.task_type
     hparams["training_type"] = args.training_type
     hparams["use_batch_negative"] = args.use_batch_negative
+    hparams["use_soft_logits"] = args.use_soft_logits
+    hparams["curriculum_learning"] = args.curriculum_learning
 
     set_random_seed(hparams['random_seed'])
 
@@ -201,4 +206,4 @@ if __name__ == '__main__':
     if args.evaluate:
         evaluate_model(args, hparams)
     else:
-        recall_list, model_path = train_model(args, hparams)
+        _ = train_model(args, hparams)

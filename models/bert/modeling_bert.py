@@ -844,6 +844,9 @@ class BertForPreTraining(BertPreTrainedModel):
             # total_loss = masked_lm_loss + next_sentence_loss
             outputs = (masked_lm_loss, next_sentence_loss) + outputs
 
+        if hasattr(self.config, 'return_cls') and self.config.return_cls:
+            outputs = outputs + (pooled_output,)
+
         return outputs  # (loss), prediction_scores, seq_relationship_score, (hidden_states), (attentions)
 
 

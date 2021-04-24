@@ -1,9 +1,9 @@
-from models.bert_cls_cl import BertCls
+from models.bert_cls_cl_simcse import BertCls
 from models.bert_eot import BertEOT
 from models.bert_insertion import BertInsertion
 
 
-def Model(hparams, *args):
+def Model(hparams, *args, **kwargs):
     name_model_map = {
         "bert_base": BertCls,
         "bert_post": BertCls,
@@ -15,4 +15,4 @@ def Model(hparams, *args):
         "bert_post_eot": BertEOT,
     }
 
-    return name_model_map[hparams.model_type](hparams, *args)
+    return name_model_map[hparams.model_type](hparams, *args, **kwargs)

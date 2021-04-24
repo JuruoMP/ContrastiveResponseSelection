@@ -35,6 +35,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
         else:
             from contrastive.eda.zh_eda.code.eda import eda
             self.eda = eda
+        self.mask_token = False
 
         # read pkls -> Input Examples
         self.input_examples = []
@@ -60,6 +61,8 @@ class ContrastiveResponseSelectionDataset(Dataset):
                             print("%d examples has been loaded!" % len(self.input_examples))
                             if self.hparams.pca_visualization:
                                 break
+                        # if len(self.input_examples) >= 100000:
+                        #     break
                     except EOFError:
                         break
         else:
@@ -84,6 +87,8 @@ class ContrastiveResponseSelectionDataset(Dataset):
         integrated_input_examples = []
         if split == 'train':
             for i in range(0, len(self.input_examples), 2):  # training set 1:1
+                if len(self.input_examples[i].response) == 0 or len(self.input_examples[i + 1].response) == 0:
+                    continue
                 integrated_input_examples.append((self.input_examples[i], self.input_examples[i + 1]))
         elif split in ('dev', 'test'):
             for i in range(0, len(self.input_examples), 10):  # dev/test set 1:10
@@ -104,6 +109,15 @@ class ContrastiveResponseSelectionDataset(Dataset):
         # End of Turn Token
         if self.hparams.do_eot:
             self._bert_tokenizer.add_tokens(["[EOT]"])
+        if self.hparams.do_sent_insertion:
+            self.ins_token = '[unused6]'
+            self._bert_tokenizer.add_tokens([self.ins_token])
+        if self.hparams.do_sent_deletion:
+            self.del_token = '[unused7]'
+            self._bert_tokenizer.add_tokens([self.del_token])
+        if self.hparams.do_sent_search:
+            self.srch_token = '[unused8]'
+            self._bert_tokenizer.add_tokens([self.srch_token])
 
     def __len__(self):
         return len(self.input_examples)
@@ -119,34 +133,122 @@ class ContrastiveResponseSelectionDataset(Dataset):
         if self.split == 'train':
             positive_example, negative_example = self.input_examples[index]
             p_context_augment = global_variables.epoch / 10
-            n_context_turns = len(positive_example.utterances)
-            n_least_turns = 3
-            if n_context_turns > n_least_turns + 1:
-                if random.random() < p_context_augment:
-                    st_turn = random.randint(1, n_context_turns - n_least_turns)
-                    positive_example.utterances = positive_example.utterances[st_turn:]
-                    negative_example.utterances = negative_example.utterances[st_turn:]
-                    negative_example.response = random.sample(negative_example.utterances[:st_turn], 1)[0]
+            positive_example.label2 = 0
+            negative_example.label2 = 2
+
             pos_response_aug, neg_response_aug = self._nlp_augment(positive_example.response), self._nlp_augment(negative_example.response)
-            all_responses = [positive_example.response, pos_response_aug, negative_example.response, neg_response_aug]
-            dist_matrix = self._edit_distance_similarity_batch(all_responses)
+            # all_responses = [positive_example.response, pos_response_aug, negative_example.response, neg_response_aug]
+            # dist_matrix = self._edit_distance_similarity_batch(all_responses)
             positive_example_aug, negative_example_aug = copy.deepcopy(positive_example), copy.deepcopy(negative_example)
             positive_example_aug.response = pos_response_aug
             positive_example_aug.response_len = len(pos_response_aug)
             negative_example_aug.response = neg_response_aug
             negative_example_aug.response_len = len(neg_response_aug)
-            positive_example.soft_logits = [dist_matrix[0][1], dist_matrix[0][2], dist_matrix[0][3]]
-            positive_example_aug.soft_logits = [dist_matrix[1][0], dist_matrix[1][2], dist_matrix[1][3]]
-            negative_example.soft_logits = [dist_matrix[2][3], dist_matrix[2][0], dist_matrix[2][1]]
-            negative_example_aug.soft_logits = [dist_matrix[3][2], dist_matrix[3][0], dist_matrix[3][1]]
+            # positive_example.soft_logits = [dist_matrix[0][1], dist_matrix[0][2], dist_matrix[0][3]]
+            # positive_example_aug.soft_logits = [dist_matrix[1][0], dist_matrix[1][2], dist_matrix[1][3]]
+            # negative_example.soft_logits = [dist_matrix[2][3], dist_matrix[2][0], dist_matrix[2][1]]
+            # negative_example_aug.soft_logits = [dist_matrix[3][2], dist_matrix[3][0], dist_matrix[3][1]]
             positive_feature = self._example_to_feature(index, positive_example)
             negative_feature = self._example_to_feature(index, negative_example)
             positive_feature_aug = self._example_to_feature(index, positive_example_aug)
             negative_feature_aug = self._example_to_feature(index, negative_example_aug)
-            positive_feature["res_sel"]['sim'] = negative_feature["res_sel"]['sim'] = \
-                self._jaccard_similarity(positive_example.response, negative_example.response)
+
             features = {'original': (positive_feature, negative_feature),
                         'augment': (positive_feature_aug, negative_feature_aug)}
+
+            # extra contrastive data
+            contras_idx = random.randint(0, len(self.input_examples) // 2 - 1)
+            contrastive_positive_example = self.input_examples[2 * contras_idx][0]
+            dialogue = contrastive_positive_example.utterances + [contrastive_positive_example.response]
+            n_context_turns = len(dialogue)
+            if n_context_turns <= 2:
+                st_turn, ed_turn = 0, n_context_turns - 2
+                positive_response = dialogue[-1]
+                less_positive_response = dialogue[0]
+                negative_response = random.sample(self.input_examples, 1)[0][0].response
+            else:
+                n_new_context_turns = random.randint(1, n_context_turns - 2)
+                st_turn = random.randint(0, n_context_turns - n_new_context_turns - 1)
+                ed_turn = st_turn + n_new_context_turns - 1
+                response_candidates = (set(range(0, st_turn)) | set(range(ed_turn + 2, n_context_turns)))
+                positive_response = dialogue[ed_turn + 1]
+                less_positive_response = dialogue[random.sample(response_candidates, 1)[0]]
+                negative_response = random.sample(self.input_examples, 1)[0][0].response
+            positive_example_contras = InputExamples(
+                utterances=dialogue[st_turn:ed_turn + 1], response=positive_response, label=1,
+                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(positive_response)), label2=0
+            )
+            less_positive_example_contras = InputExamples(
+                utterances=dialogue[st_turn:ed_turn + 1], response=less_positive_response, label=0,
+                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(less_positive_response)), label2=1
+            )
+            negative_example_contras = InputExamples(
+                utterances=dialogue[st_turn:ed_turn + 1], response=negative_response, label=0,
+                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(negative_response)), label2=2
+            )
+            positive_response_aug = self._nlp_augment(positive_response)
+            less_positive_response_aug = self._nlp_augment(less_positive_response)
+            negative_response_aug = self._nlp_augment(negative_response)
+            positive_example_contras_aug = InputExamples(
+                utterances=dialogue[st_turn:ed_turn + 1], response=positive_response_aug, label=-1,
+                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(positive_response_aug)), label2=0
+            )
+            less_positive_example_contras_aug = InputExamples(
+                utterances=dialogue[st_turn:ed_turn + 1], response=less_positive_response_aug, label=-1,
+                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(less_positive_response_aug)), label2=1
+            )
+            negative_example_contras_aug = InputExamples(
+                utterances=dialogue[st_turn:ed_turn + 1], response=negative_response_aug, label=-1,
+                seq_lengths=([len(x) for x in dialogue[st_turn:ed_turn + 1]], len(negative_response_aug)), label2=2
+            )
+            positive_feature_contras = self._example_to_feature(index, positive_example_contras)
+            less_positive_feature_contras = self._example_to_feature(index, less_positive_example_contras)
+            negative_feature_contras = self._example_to_feature(index, negative_example_contras)
+            positive_feature_contras_aug = self._example_to_feature(index, positive_example_contras_aug)
+            less_positive_feature_contras_aug = self._example_to_feature(index, less_positive_example_contras_aug)
+            negative_feature_contras_aug = self._example_to_feature(index, negative_example_contras_aug)
+
+            features.update({
+                'contras': (positive_feature_contras, negative_feature_contras),
+                'contras_aug': (positive_feature_contras_aug, negative_feature_contras_aug),
+                'sample': (less_positive_feature_contras, less_positive_feature_contras_aug),
+            })
+
+            if self.split == 'train' and (self.hparams.do_sent_insertion or self.hparams.do_sent_deletion or self.hparams.do_sent_search):
+                extra_example = copy.deepcopy(positive_example)
+                extra_example.utterances.append(extra_example.response)
+                current_feature = dict()
+                if self.hparams.do_sent_insertion:
+                    anno_sent, segment_ids, attention_mask, ins_pos, target_idx = self._insertion_annotate_sentence(extra_example)
+                    current_feature["ins"] = dict()
+                    current_feature["ins"]["anno_sent"] = torch.tensor(anno_sent).long()
+                    current_feature["ins"]["segment_ids"] = torch.tensor(segment_ids).long()
+                    current_feature["ins"]["attention_mask"] = torch.tensor(attention_mask).long()
+                    current_feature["ins"]["ins_pos"] = torch.tensor(ins_pos).long()
+                    current_feature["ins"]["label"] = torch.tensor(target_idx).long()
+                    features.update({'extra': current_feature})
+                if self.hparams.do_sent_deletion:
+                    while True:
+                        target_idx = random.sample(list(range(self.num_input_examples)), 1)[0]
+                        target_example = self.input_examples[target_idx][0]
+                        if target_idx != index and len(target_example.utterances) > 2:
+                            break
+                    anno_sent, segment_ids, attention_mask, del_pos, target_idx = self._deletion_annotate_sentence(
+                        extra_example, target_example)
+                    current_feature["del"] = dict()
+                    current_feature["del"]["anno_sent"] = torch.tensor(anno_sent).long()
+                    current_feature["del"]["segment_ids"] = torch.tensor(segment_ids).long()
+                    current_feature["del"]["attention_mask"] = torch.tensor(attention_mask).long()
+                    current_feature["del"]["del_pos"] = torch.tensor(del_pos).long()
+                    current_feature["del"]["label"] = torch.tensor(target_idx).long()
+                if self.hparams.do_sent_search:
+                    anno_sent, segment_ids, attention_mask, srch_pos, target_idx = self._search_annotate_sentence(extra_example)
+                    current_feature["srch"] = dict()
+                    current_feature["srch"]["anno_sent"] = torch.tensor(anno_sent).long()
+                    current_feature["srch"]["segment_ids"] = torch.tensor(segment_ids).long()
+                    current_feature["srch"]["attention_mask"] = torch.tensor(attention_mask).long()
+                    current_feature["srch"]["srch_pos"] = torch.tensor(srch_pos).long()
+                    current_feature["srch"]["label"] = torch.tensor(target_idx).long()
 
         else:
             features = [self._example_to_feature(index, example) for example in self.input_examples[index]]
@@ -193,39 +295,117 @@ class ContrastiveResponseSelectionDataset(Dataset):
         current_feature["res_sel"]["segment_ids"] = torch.tensor(segment_ids).long()
         current_feature["res_sel"]["attention_mask"] = torch.tensor(attention_mask).long()
         current_feature["res_sel"]["eot_pos"] = torch.tensor(eot_pos).long()
-        current_feature["res_sel"]["label"] = torch.tensor(example.label).float()
-        if hasattr(example, 'soft_logits'):
-            current_feature["res_sel"]["soft_logits"] = torch.tensor(example.soft_logits).float()
+        current_feature["res_sel"]["label"] = torch.tensor(example.label)
+        if hasattr(example, 'label2'):
+            current_feature["res_sel"]["label2"] = torch.tensor(example.label2)
 
         return current_feature
 
-    def _single_turn_processing(self, featrue: dict):
-        max_seq_len = self.hparams.max_sequence_len
-        if self.hparams.do_sent_insertion:
-            featrue["ins"] = dict()
-            featrue["ins"]["anno_sent"] = torch.tensor([0] * max_seq_len).long()
-            featrue["ins"]["segment_ids"] = torch.tensor([0] * max_seq_len).long()
-            featrue["ins"]["attention_mask"] = torch.tensor([0] * max_seq_len).long()
-            featrue["ins"]["ins_pos"] = torch.tensor([0] * max_seq_len).long()
-            featrue["ins"]["label"] = torch.tensor(-1).long()
+    def _annotate_sentence(self, example):
 
-        if self.hparams.do_sent_deletion:
-            featrue["del"] = dict()
-            featrue["del"]["anno_sent"] = torch.tensor([0] * max_seq_len).long()
-            featrue["del"]["segment_ids"] = torch.tensor([0] * max_seq_len).long()
-            featrue["del"]["attention_mask"] = torch.tensor([0] * max_seq_len).long()
-            featrue["del"]["del_pos"] = torch.tensor([0] * max_seq_len).long()
-            featrue["del"]["label"] = torch.tensor(-1).long()
+        dialog_context = []
+        if self.hparams.do_eot:
+            for utt in example.utterances:
+                if self.mask_token:
+                    utt = [tok if random.random() > 0.15 else '[MASK]' for tok in utt]
+                dialog_context.extend(utt + ["[EOT]"])
+        else:
+            for utt in example.utterances:
+                if self.mask_token:
+                    utt = [tok if random.random() > 0.15 else '[MASK]' for tok in utt]
+                dialog_context.extend(utt)
+        response = example.response + ["[EOT]"]
+        dialog_context, response = self._max_len_trim_seq(dialog_context, response)
 
-        if self.hparams.do_sent_search:
-            featrue["srch"] = dict()
-            featrue["srch"]["anno_sent"] = torch.tensor([0] * max_seq_len).long()
-            featrue["srch"]["segment_ids"] = torch.tensor([0] * max_seq_len).long()
-            featrue["srch"]["attention_mask"] = torch.tensor([0] * max_seq_len).long()
-            featrue["srch"]["srch_pos"] = torch.tensor([0] * max_seq_len).long()
-            featrue["srch"]["label"] = torch.tensor(-1).long()
+        # dialog context
+        dialog_context = ["[CLS]"] + dialog_context + ["[SEP]"]
+        segment_ids = [0] * len(dialog_context)
+        attention_mask = [1] * len(dialog_context)
 
-        return featrue
+        response = response + ["[SEP]"]
+        segment_ids.extend([1] * len(response))
+        attention_mask.extend([1] * len(response))
+
+        dialog_response = dialog_context + response
+
+        while len(dialog_response) < self.hparams.max_sequence_len:
+            dialog_response.append("[PAD]")
+            segment_ids.append(0)
+            attention_mask.append(0)
+
+        eot_pos = []
+        for tok_idx, tok in enumerate(dialog_response):
+            if tok == "[EOT]":
+                eot_pos.append(1)
+            else:
+                eot_pos.append(0)
+
+        assert len(dialog_response) == len(segment_ids) == len(attention_mask)
+        anno_sent = self._bert_tokenizer.convert_tokens_to_ids(dialog_response)
+        assert len(dialog_response) <= self.hparams.max_sequence_len
+
+        return anno_sent, segment_ids, attention_mask, eot_pos
+
+    def _insertion_annotate_sentence(self, example):
+        max_utt_len = self.hparams.max_utt_len
+
+        num_utterances = len(example.utterances)
+
+        if num_utterances > max_utt_len:
+            max_dialog_len_idx = random.sample(list(range(num_utterances - max_utt_len)), 1)[0]
+            example.utterances = example.utterances[max_dialog_len_idx:max_dialog_len_idx + max_utt_len]
+            num_utterances = len(example.utterances)
+
+        for utt_i, utt in enumerate(example.utterances):
+            if len(utt) > int(self.hparams.max_sequence_len / 4):
+                example.utterances[utt_i] = utt[:int(self.hparams.max_sequence_len / 4)]
+
+        target = []
+        dialog_context = [self.ins_token]
+        target_idx = random.sample(list(range(num_utterances)), 1)[0]
+
+        target_left, target_right = 0, 0
+        for utt_i, utt in enumerate(example.utterances):
+            if target_idx == utt_i:
+                target_left = len(dialog_context) - 1
+                target = utt + ["[EOT]"]
+                continue
+            dialog_context.extend(utt + ["[EOT]"] + [self.ins_token])
+
+        target_right = len(dialog_context) - target_left
+        dialog_context, target, target_idx = self._insert_max_len_trim_seq(dialog_context, target, target_idx,
+                                                                           (target_left, target_right))
+
+        # dialog context
+        dialog_context = ["[CLS]"] + dialog_context + ["[SEP]"]
+        segment_ids = [0] * len(dialog_context)
+        attention_mask = [1] * len(dialog_context)
+
+        target += ["[SEP]"]
+        segment_ids.extend([1] * len(target))  # same utterance
+        attention_mask.extend([1] * len(target))
+
+        dialog_target = dialog_context + target
+
+        while len(dialog_target) < self.hparams.max_sequence_len:
+            dialog_target.append("[PAD]")
+            segment_ids.append(0)
+            attention_mask.append(0)
+
+        ins_pos = []
+        ins_cnt = 0
+        for tok_idx, tok in enumerate(dialog_target):
+            if tok == self.ins_token:
+                ins_pos.append(1)
+                ins_cnt += 1
+            else:
+                ins_pos.append(0)
+        assert len(dialog_target) == len(segment_ids) == len(attention_mask)
+        assert len(dialog_target) <= self.hparams.max_sequence_len
+
+        anno_sent = self._bert_tokenizer.convert_tokens_to_ids(dialog_target)
+
+        return anno_sent, segment_ids, attention_mask, ins_pos, target_idx
 
     def _search_annotate_sentence(self, example):
         """
@@ -365,108 +545,6 @@ class ContrastiveResponseSelectionDataset(Dataset):
 
         return anno_sent, segment_ids, attention_mask, del_pos, target_idx
 
-    def _insertion_annotate_sentence(self, example):
-        max_utt_len = self.hparams.max_utt_len
-
-        num_utterances = len(example.utterances)
-
-        if num_utterances > max_utt_len:
-            max_dialog_len_idx = random.sample(list(range(num_utterances - max_utt_len)), 1)[0]
-            example.utterances = example.utterances[max_dialog_len_idx:max_dialog_len_idx + max_utt_len]
-            num_utterances = len(example.utterances)
-
-        for utt_i, utt in enumerate(example.utterances):
-            if len(utt) > int(self.hparams.max_sequence_len / 4):
-                example.utterances[utt_i] = utt[:int(self.hparams.max_sequence_len / 4)]
-
-        target = []
-        dialog_context = ["[INS]"]
-        target_idx = random.sample(list(range(num_utterances)), 1)[0]
-
-        target_left, target_right = 0, 0
-        for utt_i, utt in enumerate(example.utterances):
-            if target_idx == utt_i:
-                target_left = len(dialog_context) - 1
-                target = utt + ["[EOT]"]
-                continue
-            dialog_context.extend(utt + ["[EOT]"] + ["[INS]"])
-
-        target_right = len(dialog_context) - target_left
-        dialog_context, target, target_idx = self._insert_max_len_trim_seq(dialog_context, target, target_idx,
-                                                                           (target_left, target_right))
-
-        # dialog context
-        dialog_context = ["[CLS]"] + dialog_context + ["[SEP]"]
-        segment_ids = [0] * len(dialog_context)
-        attention_mask = [1] * len(dialog_context)
-
-        target += ["[SEP]"]
-        segment_ids.extend([1] * len(target))  # same utterance
-        attention_mask.extend([1] * len(target))
-
-        dialog_target = dialog_context + target
-
-        while len(dialog_target) < self.hparams.max_sequence_len:
-            dialog_target.append("[PAD]")
-            segment_ids.append(0)
-            attention_mask.append(0)
-
-        ins_pos = []
-        ins_cnt = 0
-        for tok_idx, tok in enumerate(dialog_target):
-            if tok == "[INS]":
-                ins_pos.append(1)
-                ins_cnt += 1
-            else:
-                ins_pos.append(0)
-        assert len(dialog_target) == len(segment_ids) == len(attention_mask)
-        assert len(dialog_target) <= self.hparams.max_sequence_len
-
-        anno_sent = self._bert_tokenizer.convert_tokens_to_ids(dialog_target)
-
-        return anno_sent, segment_ids, attention_mask, ins_pos, target_idx
-
-    def _annotate_sentence(self, example):
-
-        dialog_context = []
-        if self.hparams.do_eot:
-            for utt in example.utterances:
-                dialog_context.extend(utt + ["[EOT]"])
-        else:
-            for utt in example.utterances:
-                dialog_context.extend(utt)
-        response = example.response + ["[EOT]"]
-        dialog_context, response = self._max_len_trim_seq(dialog_context, response)
-
-        # dialog context
-        dialog_context = ["[CLS]"] + dialog_context + ["[SEP]"]
-        segment_ids = [0] * len(dialog_context)
-        attention_mask = [1] * len(dialog_context)
-
-        response = response + ["[SEP]"]
-        segment_ids.extend([1] * len(response))
-        attention_mask.extend([1] * len(response))
-
-        dialog_response = dialog_context + response
-
-        while len(dialog_response) < self.hparams.max_sequence_len:
-            dialog_response.append("[PAD]")
-            segment_ids.append(0)
-            attention_mask.append(0)
-
-        eot_pos = []
-        for tok_idx, tok in enumerate(dialog_response):
-            if tok == "[EOT]":
-                eot_pos.append(1)
-            else:
-                eot_pos.append(0)
-
-        assert len(dialog_response) == len(segment_ids) == len(attention_mask)
-        anno_sent = self._bert_tokenizer.convert_tokens_to_ids(dialog_response)
-        assert len(dialog_response) <= self.hparams.max_sequence_len
-
-        return anno_sent, segment_ids, attention_mask, eot_pos
-
     def _delete_max_len_trim_seq(self, curr_dialog_context, target_dialog_context, target_idx, lengths):
         delete_left, delete_right = lengths
 
@@ -492,7 +570,7 @@ class ContrastiveResponseSelectionDataset(Dataset):
         while len(dialog_context) + len(target) > self.hparams.max_sequence_len - 3:
             if len(dialog_context) > len(target):
                 if target_left > target_right:
-                    if dialog_context[0] in ["[INS]"]:
+                    if dialog_context[0] in [self.ins_token]:
                         target_idx -= 1
                     target_left -= 1
                     dialog_context.pop(0)  # from the left
@@ -526,14 +604,17 @@ class ContrastiveResponseSelectionDataset(Dataset):
             for key in batch[0]:
                 feature_dict[key] = []
             for example in batch:
-                for group in ('original', 'augment'):
+                for group in ('original', 'augment', 'contras', 'contras_aug', 'sample'):
+                    if group not in example:
+                        continue
                     pos_example, neg_example = example[group]
                     feature_dict[group].extend([pos_example, neg_example])
                     # group_example_list = feature_dict.get(group, [])
                     # group_example_list.extend([pos_example, neg_example])
                     # feature_dict[group] = group_example_list
-                if 'retrieve' in feature_dict:
-                    feature_dict['retrieve'].append(example['retrieve'])
+                for group in ('retrieve', 'extra'):
+                    if group in feature_dict:
+                        feature_dict[group].append(example[group])
             ret = {}
             for example_group in feature_dict:
                 ret[example_group] = default_collate(feature_dict[example_group])

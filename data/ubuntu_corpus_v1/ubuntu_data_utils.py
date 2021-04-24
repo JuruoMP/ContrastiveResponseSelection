@@ -10,7 +10,7 @@ from contrastive.cl_utils import ContrastiveUtils
 
 
 class InputExamples(object):
-    def __init__(self, utterances, response, label, seq_lengths, augments=None, retrieve=None):
+    def __init__(self, utterances, response, label, seq_lengths, augments=None, retrieve=None, label2=-1):
         self.utterances = utterances
         self.response = response
         self.label = label
@@ -19,6 +19,7 @@ class InputExamples(object):
         self.response_len = seq_lengths[1]
         self.augments = augments
         self.retrieve = retrieve
+        self.label2 = label2
 
 
 class UbuntuDataUtils(object):

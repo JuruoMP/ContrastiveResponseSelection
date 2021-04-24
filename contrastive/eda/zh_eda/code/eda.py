@@ -10,8 +10,6 @@ from random import shuffle
 import jieba
 import synonyms
 
-random.seed(2019)
-
 # 停用词列表，默认使用哈工大停用词表
 f = open('contrastive/eda/zh_eda/stopwords/hit_stopwords.txt', encoding='utf-8')
 stop_words = list()
@@ -52,6 +50,7 @@ def synonym_replacement(words, n):
 
 
 def get_synonyms(word):
+    # return word
     return synonyms.nearby(word)[0]
 
 
@@ -151,7 +150,6 @@ def eda(sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_aug=9)
     for _ in range(num_new_per_technique):
         a_words = random_insertion(words, n_ri)
         augmented_sentences.append(' '.join(a_words))
-
     # 随机交换rs
     for _ in range(num_new_per_technique):
         a_words = random_swap(words, n_rs)
@@ -175,6 +173,7 @@ def eda(sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_aug=9)
 
     return augmented_sentences
 
-##
-# 测试用例
-# eda(sentence="我们就像蒲公英，我也祈祷着能和你飞去同一片土地")
+
+if __name__ == '__main__':
+    augment_alpha = 0.1
+    ret = eda(sentence="我们就像蒲公英，我也祈祷着能和你飞去同一片土地", alpha_sr=0, alpha_ri=augment_alpha, alpha_rs=augment_alpha)

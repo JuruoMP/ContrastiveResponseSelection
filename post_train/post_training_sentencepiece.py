@@ -8,6 +8,7 @@ import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+import sentencepiece as spm
 
 from models.bert import modeling_bert, configuration_bert
 from post_train.bert.dataset import BertPostTrainingDataset
@@ -20,6 +21,7 @@ class PostTraining(object):
     def __init__(self, hparams):
         self.hparams = hparams
         self._logger = logging.getLogger(__name__)
+        self.sp_tokenizer = spm.SentencePieceProcessor(model_file='data/ubuntu_corpus_v1/ubuntu_sp_0.9995.model')
 
     def _build_dataloader(self):
         # =============================================================================
@@ -32,7 +34,7 @@ class PostTraining(object):
             "electra-nsp": BertPostTrainingDataset
         }
 
-        self.train_dataset = training_dataset_map[self.pretrained_type](self.hparams, split="train")
+        self.train_dataset = training_dataset_map[self.pretrained_type](self.hparams, split="train", data_file='ubuntu_post_training_sentencepiece.hdf5')
         self.train_dataloader = DataLoader(
             self.train_dataset,
             batch_size=self.hparams.train_batch_size,
@@ -58,6 +60,10 @@ class PostTraining(object):
             "electra-nsp": ElectraNSPDPT
         }
         self.model = training_model_map[self.pretrained_type](self.hparams)
+        self.model._bert_model.resize_token_embeddings(len(self.sp_tokenizer))
+        for name, param in self.model.named_parameters():
+            if 'word_embeddings' not in name and 'cls' not in name:
+                param.requires_grad = False
         self.model = self.model.to(self.device)
 
         # Use Multi-GPUs

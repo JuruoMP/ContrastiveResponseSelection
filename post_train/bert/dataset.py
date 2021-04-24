@@ -17,14 +17,19 @@ class BertPostTrainingDataset(Dataset):
             self,
             hparams,
             split: str = "",
+            data_file=None
     ):
         super().__init__()
 
         self.hparams = hparams
         self.split = split
 
-        with h5py.File(os.path.join(self.hparams.data_dir, "%s_post_training.hdf5" % self.hparams.task_name),
-                       "r") as features_hdf:
+        if not data_file:
+            self.data_file = "%s_post_training.hdf5" % self.hparams.task_name
+        else:
+            self.data_file = data_file
+
+        with h5py.File(os.path.join(self.hparams.data_dir, self.data_file), "r") as features_hdf:
             self.feature_keys = list(features_hdf.keys())
             self.num_instances = np.array(features_hdf.get("next_sentence_labels")).shape[0]
         print("total %s examples : %d" % (split, self.num_instances))
@@ -51,8 +56,7 @@ class BertPostTrainingDataset(Dataset):
 
     def _read_hdf_features(self, index):
         features = {}
-        with h5py.File(os.path.join(self.hparams.data_dir, "%s_post_training.hdf5" % self.hparams.task_name),
-                       "r") as features_hdf:
+        with h5py.File(os.path.join(self.hparams.data_dir, self.data_file), "r") as features_hdf:
             for f_key in self.feature_keys:
                 features[f_key] = features_hdf[f_key][index]
 

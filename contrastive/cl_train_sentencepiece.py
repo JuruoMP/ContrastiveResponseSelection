@@ -11,18 +11,19 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
+import sentencepiece as spm
 
-from contrastive.cl_evaluation import ContrastiveEvaluation
-from data.contrastive_dataset_v6 import ContrastiveResponseSelectionDataset
+from contrastive.cl_evaluation_sentencepiece import ContrastiveEvaluation
+from data.contrastive_dataset_v6_sentencepiece import ContrastiveResponseSelectionDatasetSentencepiece
 from models import Model
 from models.utils.checkpointing import CheckpointManager, load_checkpoint
-import global_variables
 
 
 class ContrastiveResponseSelection(object):
     def __init__(self, hparams):
         self.hparams = hparams
         self._logger = logging.getLogger(__name__)
+        self.sp_tokenizer = spm.SentencePieceProcessor(model_file='data/ubuntu_corpus_v1/ubuntu_sp_0.9995.model')
 
         random.seed(hparams.random_seed)
         np.random.seed(hparams.random_seed)
@@ -35,14 +36,14 @@ class ContrastiveResponseSelection(object):
         # =============================================================================
         #   SETUP DATASET, DATALOADER
         # =============================================================================
-        self.train_dataset = ContrastiveResponseSelectionDataset(self.hparams, split="train")
+        self.train_dataset = ContrastiveResponseSelectionDatasetSentencepiece(self.hparams, split="train")
         self.train_dataloader = DataLoader(
             self.train_dataset,
             batch_size=self.hparams.train_batch_size,
             num_workers=self.hparams.cpu_workers,
             shuffle=True,
             drop_last=True,
-            collate_fn=ContrastiveResponseSelectionDataset.collate_fn
+            collate_fn=ContrastiveResponseSelectionDatasetSentencepiece.collate_fn
         )
 
         print("""
@@ -57,7 +58,7 @@ class ContrastiveResponseSelection(object):
         # =============================================================================
         print('\t* Building model...')
 
-        self.model = Model(self.hparams)
+        self.model = Model(self.hparams, resize_vocab=len(self.sp_tokenizer))
         self.model = self.model.to(self.device)
 
         # Use Multi-GPUs
@@ -133,9 +134,6 @@ class ContrastiveResponseSelection(object):
         self._build_model()
         self._setup_training()
 
-        global_variables.num_iter = len(self.train_dataset) // self.hparams.virtual_batch_size
-        global_variables.epoch = 0
-
         # ins, del, mod check!
 
         # Evaluation Setup
@@ -153,7 +151,6 @@ class ContrastiveResponseSelection(object):
         best_recall_list, best_model_path = [0], ''
 
         for epoch in range(self.start_epoch, self.hparams.num_epochs + 1):
-            global_variables.epoch = epoch
             self.model.train()
             tqdm_batch_iterator = tqdm(self.train_dataloader)
             accu_batch = 0
@@ -215,7 +212,6 @@ class ContrastiveResponseSelection(object):
                     accu_batch = 0
 
                     global_iteration_step += 1
-                    global_variables.global_step += 1
                     # description = "[{}][Epoch: {:3d}][Iter: {:6d}][Loss: {:6f}][Res_Loss: {:4f}]" \
                     #               "[Ins_Loss: {:4f}][Del_Loss: {:4f}][Srch_Loss: {:4f}][lr: {:7f}]".format(
                     #     datetime.utcnow() - train_begin,

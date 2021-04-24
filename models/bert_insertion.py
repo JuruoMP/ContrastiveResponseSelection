@@ -29,11 +29,6 @@ class BertInsertion(nn.Module):
         )
         bert_outputs = outputs[0]
 
-        if self.hparams.pca_visualization:
-            pca_handle = open("/data/taesunwhang/response_selection/visualization/%s/ins_token_representation.pkl"
-                              % self.hparams.task_name, "ab")
-            print(pca_handle)
-
         ins_losses = []
         for batch_idx, ins_pos in enumerate(batch["ins_pos"]):
             if batch["label"][batch_idx] == -1:
@@ -49,9 +44,6 @@ class BertInsertion(nn.Module):
             ins_logits = ins_logits.squeeze(-1)  # num_utterances
 
             target_id = batch["label"][batch_idx]
-
-            if self.hparams.pca_visualization:
-                pickle.dump([dialog_ins_out.to("cpu").tolist(), target_id.to("cpu").tolist()], pca_handle)
 
             if self.hparams.auxiliary_loss_type == "softmax":
                 ins_loss = self._criterion(ins_logits.unsqueeze(0), target_id.unsqueeze(0))

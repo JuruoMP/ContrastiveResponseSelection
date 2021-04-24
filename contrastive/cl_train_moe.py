@@ -16,10 +16,9 @@ from contrastive.cl_evaluation import ContrastiveEvaluation
 from data.contrastive_dataset_v6 import ContrastiveResponseSelectionDataset
 from models import Model
 from models.utils.checkpointing import CheckpointManager, load_checkpoint
-import global_variables
 
 
-class ContrastiveResponseSelection(object):
+class ContrastiveResponseSelectionMoe(object):
     def __init__(self, hparams):
         self.hparams = hparams
         self._logger = logging.getLogger(__name__)
@@ -133,11 +132,6 @@ class ContrastiveResponseSelection(object):
         self._build_model()
         self._setup_training()
 
-        global_variables.num_iter = len(self.train_dataset) // self.hparams.virtual_batch_size
-        global_variables.epoch = 0
-
-        # ins, del, mod check!
-
         # Evaluation Setup
         evaluation = ContrastiveEvaluation(self.hparams, model=self.model)
 
@@ -146,14 +140,12 @@ class ContrastiveResponseSelection(object):
 
         train_begin = datetime.utcnow()  # New
         global_iteration_step = 0
-        accu_loss, accu_res_sel_loss, accu_cl_loss = 0, 0, 0
-        accu_ins_loss, accu_del_loss, accu_srch_loss = 0, 0, 0
+        accu_loss, accu_res_sel_loss, accu_moe_loss = 0, 0, 0
         accu_cnt = 0
 
         best_recall_list, best_model_path = [0], ''
 
         for epoch in range(self.start_epoch, self.hparams.num_epochs + 1):
-            global_variables.epoch = epoch
             self.model.train()
             tqdm_batch_iterator = tqdm(self.train_dataloader)
             accu_batch = 0
@@ -168,31 +160,16 @@ class ContrastiveResponseSelection(object):
                 buffer_batch = batch
                 with amp.autocast():
                     _, losses = self.model(buffer_batch)
-                res_sel_loss, contrastive_loss, ins_loss, del_loss, srch_loss = losses
+                res_sel_loss, expert_loss, _, _ = losses
                 if res_sel_loss is not None:
                     res_sel_loss = self.hparams.res_sel_loss_ratio * res_sel_loss.mean()
                     accu_res_sel_loss += res_sel_loss.item()
                 loss = self.scaler.scale(res_sel_loss)
-                if self.hparams.do_contrastive:
-                    cl_loss = self.cl_loss_ratio * contrastive_loss.mean()
-                    accu_cl_loss += cl_loss.item()
-                    cl_loss = self.scaler.scale(cl_loss)
-                    loss += cl_loss
-                if self.hparams.do_sent_insertion:
-                    ins_loss = ins_loss.mean()
-                    accu_ins_loss += ins_loss.item()
-                    ins_loss = self.scaler.scale(ins_loss)
-                    loss += ins_loss
-                if self.hparams.do_sent_deletion:
-                    del_loss = del_loss.mean()
-                    accu_del_loss += del_loss.item()
-                    del_loss = self.scaler.scale(del_loss)
-                    loss += del_loss
-                if self.hparams.do_sent_search:
-                    srch_loss = srch_loss.mean()
-                    accu_srch_loss += srch_loss.item()
-                    srch_loss = self.scaler.scale(srch_loss)
-                    loss += srch_loss
+
+                expert_loss = 5 * expert_loss.mean()
+                accu_moe_loss += expert_loss.item()
+                expert_loss = self.scaler.scale(expert_loss)
+                loss += expert_loss
 
                 loss.backward()
                 accu_loss += loss.item()
@@ -215,7 +192,6 @@ class ContrastiveResponseSelection(object):
                     accu_batch = 0
 
                     global_iteration_step += 1
-                    global_variables.global_step += 1
                     # description = "[{}][Epoch: {:3d}][Iter: {:6d}][Loss: {:6f}][Res_Loss: {:4f}]" \
                     #               "[Ins_Loss: {:4f}][Del_Loss: {:4f}][Srch_Loss: {:4f}][lr: {:7f}]".format(
                     #     datetime.utcnow() - train_begin,
@@ -224,17 +200,16 @@ class ContrastiveResponseSelection(object):
                     #     accu_res_sel_loss / accu_cnt, accu_ins_loss / accu_cnt, accu_del_loss / accu_cnt,
                     #     accu_srch_loss / accu_cnt,
                     #     self.optimizer.param_groups[0]['lr'])
-                    description = "[Epoch:{:2d}][Iter:{:5d}][Loss: {:.2e}][Res/CL/Ins/Del/Srch: {:.2e}/{:.2e}/{:.2e}/{:.2e}/{:.2e}][lr: {:.2e}]".format(
-                        epoch,
-                        global_iteration_step, accu_loss / accu_cnt, accu_res_sel_loss / accu_cnt,
-                        accu_cl_loss / accu_cnt, accu_ins_loss / accu_cnt, accu_del_loss / accu_cnt, accu_srch_loss / accu_cnt,
+                    description = "[Epoch:{:2d}][Iter:{:5d}][Loss: {:.2e}][Res/MoE: {:.2e}/{:.2e}][lr: {:.2e}]".format(
+                        epoch, global_iteration_step,
+                        accu_loss / accu_cnt, accu_res_sel_loss / accu_cnt, accu_moe_loss / accu_cnt,
                         self.optimizer.param_groups[0]['lr'])
                     tqdm_batch_iterator.set_description(description)
 
                     # tensorboard
                     if global_iteration_step % self.hparams.tensorboard_step == 0:
                         self._logger.info(description)
-                        accu_loss, accu_cl_loss, accu_res_sel_loss, accu_ins_loss, accu_del_loss, accu_srch_loss, accu_cnt = 0, 0, 0, 0, 0, 0, 0
+                        accu_loss, accu_res_sel_loss, accu_moe_loss, accu_cnt = 0, 0, 0, 0
 
                 # if (batch_idx * 10) % len(self.train_dataloader) == 0:
                 #     state_dict = self.model.module.state_dict() if isinstance(self.model, nn.DataParallel) else self.model.state_dict()

@@ -12,7 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 from models.bert import modeling_bert, configuration_bert
 from post_train.bert.dataset import BertPostTrainingDataset
 from post_train.electra.dataset import ElectraPostTrainingDataset
-from post_train.pretrained_dpt import BertDPT, ElectraDPT, ElectraNSPDPT
+from post_train.pretrained_dpt_sp import BertDPT, ElectraDPT, ElectraNSPDPT
 from models.utils.checkpointing import CheckpointManager, load_checkpoint
 
 
@@ -117,7 +117,7 @@ class PostTraining(object):
 
         train_begin = datetime.utcnow()  # New
         global_iteration_step = 0
-        accu_electra_loss, accu_mlm_loss, accu_nsp_loss = 0, 0, 0
+        accu_electra_loss, accu_mlm_loss, accu_nsp_loss, accu_fp_loss = 0, 0, 0, 0
         accumulate_batch, accu_count = 0, 0
 
         for epoch in range(self.start_epoch, self.hparams.num_epochs):
@@ -130,7 +130,7 @@ class PostTraining(object):
                     buffer_batch[key] = buffer_batch[key].to(self.device)
 
                 losses = self.model(buffer_batch)
-                electra_loss, mlm_loss, nsp_loss = losses
+                electra_loss, mlm_loss, nsp_loss, fp_loss = losses
 
                 if electra_loss is not None:
                     electra_loss = electra_loss.mean()
@@ -144,8 +144,12 @@ class PostTraining(object):
                     nsp_loss = nsp_loss.mean()
                     accu_nsp_loss += nsp_loss.item()
 
+                if fp_loss is not None:
+                    fp_loss = fp_loss.mean()
+                    accu_fp_loss += fp_loss.item()
+
                 loss = None
-                for task_tensor_loss in [electra_loss, mlm_loss, nsp_loss]:
+                for task_tensor_loss in [electra_loss, mlm_loss, nsp_loss, fp_loss]:
                     if task_tensor_loss is not None:
                         loss = loss + task_tensor_loss if loss is not None else task_tensor_loss
 
@@ -169,9 +173,9 @@ class PostTraining(object):
                     #     global_iteration_step, (accu_electra_loss / accu_count),
                     #     (accu_mlm_loss / accu_count), (accu_nsp_loss / accu_count),
                     #     self.optimizer.param_groups[0]['lr'])
-                    description = "[Epoch: {:3d}][Iter: {:6d}][MLM_Loss: {:6f}][lr: {:.1e}]".format(
+                    description = "[Epoch: {:3d}][Iter: {:6d}][LM_Loss: {:6f}][lr: {:.1e}]".format(
                         epoch,
-                        global_iteration_step, (accu_mlm_loss / accu_count),
+                        global_iteration_step, (accu_electra_loss / accu_count),
                         self.optimizer.param_groups[0]['lr'])
                     tqdm_batch_iterator.set_description(description)
 
