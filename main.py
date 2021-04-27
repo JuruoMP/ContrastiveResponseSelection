@@ -12,6 +12,7 @@ from config.hparams import *
 from train import ResponseSelection
 from post_train.post_training import PostTraining
 from post_train.post_training_model_cl import PostTrainingModelCL
+from post_train.post_training_data_cl import PostTrainingDataCL
 from contrastive.cl_train import ContrastiveResponseSelection
 from contrastive.cl_train_sentencepiece import ContrastiveResponseSelection as ContrastiveResponseSelectionSentencepiece
 
@@ -49,6 +50,7 @@ TRAINING_TYPE_MAP = {
     "fine_tuning": ResponseSelection,
     "post_training": PostTraining,
     "post_training_model_cl": PostTrainingModelCL,
+    "post_training_data_cl": PostTrainingDataCL,
     "contrastive": ContrastiveResponseSelection,
     "contrastive_sentencepiece": ContrastiveResponseSelectionSentencepiece
 }
