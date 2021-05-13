@@ -236,7 +236,7 @@ class ContrastiveResponseSelection(object):
                         self._logger.info(description)
                         accu_loss, accu_cl_loss, accu_res_sel_loss, accu_ins_loss, accu_del_loss, accu_srch_loss, accu_cnt = 0, 0, 0, 0, 0, 0, 0
 
-                if global_iteration_step > len(self.train_dataloader) and (batch_idx * 20) % len(self.train_dataloader) == 0:
+                if global_iteration_step > len(self.train_dataloader) and batch_idx % 1000 == 0:
                     state_dict = self.model.module.state_dict() if isinstance(self.model, nn.DataParallel) else self.model.state_dict()
                     recall_list = evaluation.run_evaluate(state_dict)
                     if recall_list[0] > best_recall_list[0]:
