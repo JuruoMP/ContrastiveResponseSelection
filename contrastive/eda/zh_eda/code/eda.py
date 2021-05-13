@@ -50,8 +50,8 @@ def synonym_replacement(words, n):
 
 
 def get_synonyms(word):
-    # return word
-    return synonyms.nearby(word)[0]
+    return word
+    # return synonyms.nearby(word)[0]
 
 
 ########################################################################
@@ -132,6 +132,8 @@ def eda(sentence, alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, p_rd=0.1, num_aug=9)
     seg_list = " ".join(seg_list)
     words = list(seg_list.split())
     num_words = len(words)
+    if num_words == 0:
+        return [sentence]
 
     augmented_sentences = []
     num_new_per_technique = int(num_aug / 4) + 1

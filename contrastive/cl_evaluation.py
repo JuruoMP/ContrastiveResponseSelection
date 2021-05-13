@@ -98,10 +98,10 @@ class ContrastiveEvaluation(object):
         if -1 not in self.hparams.gpu_ids and len(self.hparams.gpu_ids) > 1:
             self.model = nn.DataParallel(self.model, self.hparams.gpu_ids)
 
-    def run_evaluate(self, evaluation_path_or_model):
+    def run_evaluate(self, evaluation_path_or_state_dict):
         self._logger.info("Evaluation")
-        if isinstance(evaluation_path_or_model, str):
-            evaluation_path = evaluation_path_or_model
+        if isinstance(evaluation_path_or_state_dict, str):
+            evaluation_path = evaluation_path_or_state_dict
             model_state_dict, optimizer_state_dict = load_checkpoint(evaluation_path)
             print(evaluation_path)
             if isinstance(self.model, nn.DataParallel):
@@ -109,14 +109,7 @@ class ContrastiveEvaluation(object):
             else:
                 self.model.load_state_dict(model_state_dict)
         else:
-            if isinstance(evaluation_path_or_model, nn.DataParallel):
-                model = evaluation_path_or_model.module
-            else:
-                model = evaluation_path_or_model
-            if isinstance(self.model, nn.DataParallel):
-                self.model.module.load_state_dict(model.state_dict())
-            else:
-                self.model.load_state_dict(model.state_dict())
+            self.model.module.load_state_dict(evaluation_path_or_state_dict)
 
 
         k_list = self.hparams.recall_k_list
@@ -216,21 +209,22 @@ class ContrastiveEvaluation(object):
         pkl.dump(ret_logits, open(f'cache/{self.hparams.task_name}_soft_logits_{datetime.now().strftime("%m%d%H%M%S")}.pkl', 'wb'))
 
 
-    def run_evaluate_with_data(self, evaluation_path, data):
+    def run_evaluate_with_data(self, evaluation_path, data=None, return_vec=False):
         self._logger.info("Evaluation")
         ret = []
 
         test_dataset = ContrastiveResponseSelectionDataset(
             self.hparams,
-            split="",
+            split="test",
             data=data,
         )
 
         test_dataloader = DataLoader(
             test_dataset,
-            batch_size=128,
+            batch_size=1,
             num_workers=self.hparams.cpu_workers,
             drop_last=False,
+            collate_fn=ContrastiveResponseSelectionDataset.collate_fn,
         )
 
         model_state_dict, optimizer_state_dict = load_checkpoint(evaluation_path)
@@ -242,14 +236,29 @@ class ContrastiveEvaluation(object):
 
         self.model.eval()
 
+        # with torch.no_grad():
+        #     for batch_idx, batch in enumerate(tqdm(test_dataloader)):
+        #         buffer_batch = batch[0].copy()
+        #         for key in buffer_batch["res_sel"]:
+        #             buffer_batch["res_sel"][key] = buffer_batch["res_sel"][key].to(self.device)
+        #         buffer_batch_dict = {'original': buffer_batch}
+        #         logits, loss = self.model(buffer_batch_dict)
+        #         pred = torch.sigmoid(logits).to("cpu").tolist()
+        #         ret += pred
+
         with torch.no_grad():
+            all_cls_logits = []
             for batch_idx, batch in enumerate(tqdm(test_dataloader)):
-                buffer_batch = batch[0].copy()
+                buffer_batch = batch.copy()
                 for key in buffer_batch["res_sel"]:
                     buffer_batch["res_sel"][key] = buffer_batch["res_sel"][key].to(self.device)
-                buffer_batch_dict = {'original': buffer_batch}
-                logits, loss = self.model(buffer_batch_dict)
-                pred = torch.sigmoid(logits).to("cpu").tolist()
-                ret += pred
-
+                logits, cls_logits, losses = self.model({'original': buffer_batch})
+                cls_logits = cls_logits.detach().cpu()
+                all_cls_logits.append(cls_logits)
+            all_cls_logits = torch.cat(all_cls_logits, dim=0)
+            all_vecs_numpy = all_cls_logits.numpy()
+            pkl.dump(all_vecs_numpy, open('all_vecs_cl_task.numpy', 'wb'))
+            a = 1
+        if return_vec:
+            return ret, all_cls_logits
         return ret
